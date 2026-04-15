@@ -1336,6 +1336,370 @@ Tests:       1 passed, 1 total
 
 These results demonstrate that the system meets the requirements for reliability and maintainability as specified in NFR-13.
 
+---
+
+## Docker Build and Run
+
+This project provides a Docker-based setup for running the backend API together with its supporting services.
+
+The Docker environment contains three services:
+
+- `api` – NestJS backend application
+- `mysql` – MySQL database
+- `redis` – Redis cache
+
+---
+
+### Docker Compose Services
+
+The `docker-compose.yml` file is located in the `infra/` folder and defines the following services:
+
+- **api**
+  - Builds the NestJS application from `../app/Dockerfile`
+  - Uses environment variables from `app/.env.docker`
+  - Exposes port `3000`
+  - Depends on MySQL and Redis
+  - Includes a health check using `/health`
+
+- **mysql**
+  - Uses the official `mysql:8.0` image
+  - Exposes MySQL through local port `3307`
+  - Persists database data using a Docker volume
+  - Includes a health check
+
+- **redis**
+  - Uses the official `redis:7-alpine` image
+  - Exposes Redis through local port `6379`
+  - Persists cache data using a Docker volume
+
+---
+
+### Dockerfile Overview
+
+The backend uses a multi-stage Dockerfile:
+
+#### Stage 1: Builder
+- Uses `node:20-alpine`
+- Installs dependencies with `npm ci`
+- Generates Prisma Client
+- Builds the NestJS application with `npm run build`
+
+#### Stage 2: Production
+- Uses `node:20-alpine`
+- Installs production dependencies only with `npm ci --omit=dev`
+- Generates Prisma Client again for the production image
+- Copies compiled files from the builder stage
+- Exposes port `3000`
+- Runs:
+  - `npx prisma db push`
+  - `npx prisma db seed`
+  - `node dist/src/main.js`
+
+This approach keeps the final image smaller and more suitable for deployment.
+
+---
+
+### Build and Run with Docker Compose
+
+From inside the `app/` folder, move to the `infra/` folder:
+
+```bash
+cd ../infra
+```
+
+To build and run the full system:
+
+```bash
+docker compose up --build
+```
+
+To run in detached mode:
+
+```bash
+docker compose up --build -d
+```
+
+This starts:
+- `final_project_app`
+- `final_project_mysql`
+- `final_project_redis`
+
+---
+
+### Run Only Supporting Services
+
+For local development and local test execution, only MySQL and Redis are required in Docker.
+
+From inside the `app/` folder:
+
+```bash
+cd ../infra
+docker compose up -d mysql redis
+cd ../app
+```
+
+In this mode:
+- the backend runs locally
+- MySQL runs in Docker
+- Redis runs in Docker
+
+---
+
+### Stop Docker Services
+
+To stop the containers:
+
+```bash
+cd ../infra
+docker compose down
+```
+
+To stop the containers and remove volumes:
+
+```bash
+docker compose down -v
+```
+
+**Note:**  
+If Docker volumes are removed, the database schema will also be removed. In that case, you must reinitialize Prisma before running the application or tests again.
+
+---
+
+## Deployment
+
+The system is deployed on a server using Docker and Nginx.
+
+### Deployment Environment
+
+- Backend API runs in Docker
+- MySQL runs in Docker
+- Redis runs in Docker
+- Nginx is used as a reverse proxy
+
+### Deployment Flow
+
+1. Clone the project on the target server
+2. Configure environment variables
+3. Build and start the Docker services
+4. Use Nginx to forward incoming requests to the backend API
+5. Verify deployment using the `/health` endpoint
+
+---
+
+### Deployment Command
+
+From the `infra/` folder on the server:
+
+```bash
+docker compose up --build -d
+```
+
+---
+
+### Deployment Access
+
+The deployed API is exposed through Nginx.
+
+Replace `<server-ip>` with the actual server IP address provided in the deployment environment.
+
+Example base URL:
+
+```text
+http://<server-ip>/api
+```
+
+For this project deployment:
+
+```text
+http://10.34.112.129/api
+```
+
+Swagger documentation:
+
+```text
+http://<server-ip>/api/api-docs
+```
+
+Project Swagger URL:
+
+```text
+http://10.34.112.129/api/api-docs
+```
+
+Health check endpoint:
+
+```text
+http://<server-ip>/api/health
+```
+
+Project Health Check:
+
+```text
+http://10.34.112.129/api/health
+```
+
+---
+
+**Note:**  
+The deployed API is accessible only within the MU-WiFi network.
+
+---
+
+### Deployment Architecture
+
+The deployment uses the following structure:
+
+```text
+Client
+  │
+  ▼
+Nginx Reverse Proxy
+  │
+  ▼
+NestJS API Container
+  │
+  ├── MySQL Container
+  └── Redis Container
+```
+
+This architecture allows:
+- clean separation of services
+- easier deployment and maintenance
+- production-like environment configuration
+- health monitoring through the API health check endpoint
+
+---
+
+## Caching and Rate Limiting
+
+This project applies both caching and rate limiting to improve performance and system stability.
+
+---
+
+### Caching Strategy
+
+Caching is applied to frequently accessed room endpoints using NestJS `CacheInterceptor`.
+
+**Cached endpoints:**
+- `GET /rooms`
+- `GET /rooms/search`
+
+**Implementation**
+- `@UseInterceptors(CacheInterceptor)`
+- `@CacheTTL(1000 * 10)`
+
+**Reasoning**
+
+These two endpoints are likely to receive frequent repeated requests from users browsing available rooms. Caching helps reduce repeated database queries and improves response time when many users access the same room data at the same time.
+
+A short cache duration of **10 seconds** was chosen as a balance between performance and freshness:
+
+- short enough to reduce the risk of stale room information
+- long enough to reduce unnecessary repeated reads under concurrent access
+
+For example, if an admin creates, updates, disables, or deletes a room, users will not keep seeing outdated room data for an excessively long time. A longer cache duration such as several minutes would improve performance further, but would increase the risk of users seeing outdated room availability. Therefore, a short TTL is more appropriate for this system.
+
+---
+
+### Rate Limiting Strategy
+
+Rate limiting is applied using NestJS Throttler to reduce abuse and improve robustness on booking-related endpoints.
+
+**Rate-limited endpoints:**
+- `GET /bookings`
+- `GET /bookings/search`
+
+**Implementation**
+- `@Throttle({ default: { limit: 100, ttl: 60000 } })`
+
+This configuration allows up to **100 requests per 60 seconds** per client.
+
+**Reasoning**
+
+These booking endpoints are protected endpoints that return user-specific or admin-visible booking data. They may be accessed repeatedly by frontend interfaces such as booking history pages, dashboard views, or filtered search screens.
+
+The chosen limit is intended to balance normal usability and protection:
+
+- high enough for legitimate users and frontend refresh activity
+- low enough to reduce excessive polling or abusive repeated requests
+- helps protect the backend and database from unnecessary load
+
+This is especially useful for search endpoints, which may otherwise be triggered repeatedly in a short period of time.
+
+---
+
+### Summary
+
+- Caching improves performance for frequently accessed room data
+- A short TTL helps preserve data freshness
+- Rate limiting reduces abuse and excessive repeated requests
+- Together, these strategies improve performance, scalability, and system stability
+
+---
+
+### Performance Testing
+
+Basic performance testing was conducted using `autocannon` to evaluate system responsiveness under concurrent load.
+
+---
+
+**Test Setup**
+
+- Tool: `autocannon`
+- Duration: 20 seconds
+- Concurrent connections: 100
+- Target endpoints:
+  - `GET /rooms`
+  - `GET /rooms/search`
+
+---
+
+**Test Commands**
+
+```bash
+npx autocannon -c 100 -d 20 http://localhost:3000/rooms
+
+npx autocannon -c 100 -d 20 "http://localhost:3000/rooms/search?keyword=Ocean&is_active=true&min_capacity=2&max_price=2000&limit=10&offset=0"
+```
+
+---
+
+**Results Summary**
+
+| Endpoint | Avg Latency | Requests/sec | Notes |
+|----------|------------|-------------|------|
+| `/rooms` | ~21.55 ms | ~4532 req/sec | Cached response |
+| `/rooms/search` | ~21.07 ms | ~4635 req/sec | Cached response |
+
+Both endpoints maintained low average latency (~20–22 ms) even under 100 concurrent connections.
+
+---
+
+**Observation on Non-2xx Responses**
+
+A significant number of requests returned non-2xx responses during testing.
+
+This is expected because:
+
+- A global rate limit is applied:
+  - 10,000 requests per minute
+- The test generated over 90,000 requests in 20 seconds
+
+As a result:
+- Excess requests were throttled (likely HTTP 429)
+- The system remained stable and responsive instead of being overloaded
+
+---
+
+**Interpretation**
+
+- Cached endpoints handled high concurrency efficiently
+- Average latency remained low, indicating fast response times
+- Rate limiting successfully prevented excessive load on the system
+- The system maintained stability even under aggressive traffic conditions
+
+These results demonstrate that the system satisfies performance-related requirements, including handling concurrent users and maintaining reasonable response times.
+
 ## 👥 Team
 
 68_Group16  
