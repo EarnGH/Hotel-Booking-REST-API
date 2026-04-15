@@ -9,6 +9,9 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { redisStore } from 'cache-manager-redis-yet';
+import { BookingsModule } from './bookings/bookings.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -16,6 +19,9 @@ import { redisStore } from 'cache-manager-redis-yet';
     RoomsModule,
     AuthModule,
     UsersModule,
+    BookingsModule,
+    NotificationsModule,
+    HealthModule,
 
     // Configure CacheManager with Redis
     CacheModule.registerAsync({

@@ -3,11 +3,11 @@ import { RoomsService } from './rooms.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 
-// Mocking the PrismaService to avoid connecting to a real database.
-// We define the specific methods we expect to be called (create, findMany, etc.)
-// and use jest.fn() to simulate their behavior and return values.
 const mockPrismaService = {
   rooms: {
     create: jest.fn(),
@@ -22,7 +22,6 @@ describe('RoomsService', () => {
   let service: RoomsService;
   let prisma: PrismaService;
 
-  // In beforeEach, we use Test.createTestingModule to inject this mock into RoomsService. This isolates the service logic from the database layer.
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -33,24 +32,22 @@ describe('RoomsService', () => {
 
     service = module.get<RoomsService>(RoomsService);
     prisma = module.get<PrismaService>(PrismaService);
+
+    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  // Test Suite for creating a room
-  // Verifies that:
-  // 1. The service correctly passes DTO data to Prisma.
-  // 2. Prisma is called with the correct structure.
   describe('create', () => {
     it('should create a room successfully', async () => {
       const dto: CreateRoomDto = {
-        name: "Standard Room 105",
-        description: "Standard room with garden view",
+        name: 'Standard Room 105',
+        description: 'Standard room with garden view',
         capacity: 4,
         price_per_night: 2500,
-        image_url: "/images/room105.jpg",
+        image_url: '/images/room105.jpg',
         is_active: true,
       };
 
@@ -63,31 +60,74 @@ describe('RoomsService', () => {
 
       mockPrismaService.rooms.create.mockResolvedValue(result);
 
-      expect(await service.create(dto)).toEqual(result);
+      await expect(service.create(dto)).resolves.toEqual(result);
 
       expect(prisma.rooms.create).toHaveBeenCalledWith({
         data: {
-          name: dto.name,
-          description: dto.description,
-          capacity: dto.capacity,
-          price_per_night: dto.price_per_night,
-          image_url: dto.image_url,
-          is_active: dto.is_active,
+          ...dto,
+          is_active: true,
         },
       });
+    });
+
+    it('should default is_active to true when not provided', async () => {
+      const dto: CreateRoomDto = {
+        name: 'Standard Room 106',
+        description: 'Another room',
+        capacity: 2,
+        price_per_night: 1800,
+        image_url: '/images/room106.jpg',
+      };
+
+      const result = {
+        id: 2,
+        ...dto,
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockPrismaService.rooms.create.mockResolvedValue(result);
+
+      await expect(service.create(dto)).resolves.toEqual(result);
+
+      expect(prisma.rooms.create).toHaveBeenCalledWith({
+        data: {
+          ...dto,
+          is_active: true,
+        },
+      });
+    });
+
+    it('should throw BadRequestException when prisma create fails', async () => {
+      const dto: CreateRoomDto = {
+        name: 'Bad Room',
+        description: 'Invalid data',
+        capacity: 2,
+        price_per_night: 1000,
+        image_url: '/images/bad-room.jpg',
+        is_active: true,
+      };
+
+      mockPrismaService.rooms.create.mockRejectedValue(
+        new Error('Database create failed'),
+      );
+
+      await expect(service.create(dto)).rejects.toThrow(BadRequestException);
+      expect(prisma.rooms.create).toHaveBeenCalled();
     });
   });
 
   describe('findAll', () => {
-    it('should return an array of rooms', async () => {
+    it('should return an array of rooms ordered by created_at asc', async () => {
       const result = [
         {
           id: 1,
-          name: "Standard Room 105",
-          description: "Standard room with garden view",
+          name: 'Standard Room 105',
+          description: 'Standard room with garden view',
           capacity: 4,
           price_per_night: 2500,
-          image_url: "/images/room105.jpg",
+          image_url: '/images/room105.jpg',
           is_active: true,
           created_at: new Date(),
           updated_at: new Date(),
@@ -96,14 +136,18 @@ describe('RoomsService', () => {
 
       mockPrismaService.rooms.findMany.mockResolvedValue(result);
 
-      expect(await service.findAll()).toEqual(result);
+      await expect(service.findAll()).resolves.toEqual(result);
 
-      expect(prisma.rooms.findMany).toHaveBeenCalledWith();
+      expect(prisma.rooms.findMany).toHaveBeenCalledWith({
+        orderBy: {
+          created_at: 'asc',
+        },
+      });
     });
   });
 
   describe('searchRooms', () => {
-    it('should return an array of filtered rooms', async () => {
+    it('should return filtered rooms with all filters applied', async () => {
       const filters = {
         keyword: 'Standard',
         is_active: 'true',
@@ -129,12 +173,7 @@ describe('RoomsService', () => {
 
       mockPrismaService.rooms.findMany.mockResolvedValue(rooms);
 
-      const result = await service.searchRooms(filters);
-
-      expect(result).toEqual({
-        success: true,
-        data: rooms,
-      });
+      await expect(service.searchRooms(filters)).resolves.toEqual(rooms);
 
       expect(prisma.rooms.findMany).toHaveBeenCalledWith({
         where: {
@@ -165,54 +204,160 @@ describe('RoomsService', () => {
         },
       });
     });
-  });
 
-  // Test Suite for retrieving a single room
-  // Verifies:
-  // 1. Success: Returns the room when found.
-  // 2. Failure: Returns null when the ID does not exist.
-  describe('findOne', () => {
-    it('should return a single room', async () => {
-        const result = {
+    it('should return rooms with empty where clause when no filters are provided', async () => {
+      const rooms = [
+        {
           id: 1,
-          name: 'Standard Room 105',
-          description: 'Standard room with garden view',
-          capacity: 4,
-          price_per_night: 2500,
-          image_url: '/images/room105.jpg',
+          name: 'Room A',
+          description: 'Test room',
+          capacity: 2,
+          price_per_night: 1500,
+          image_url: '/images/room-a.jpg',
           is_active: true,
           created_at: new Date(),
           updated_at: new Date(),
-        };
-        mockPrismaService.rooms.findUnique.mockResolvedValue(result);
-  
-        expect(await service.findOne(1)).toBe(result);
-        expect(prisma.rooms.findUnique).toHaveBeenCalledWith({ where: { id: 1 } });
+        },
+      ];
+
+      mockPrismaService.rooms.findMany.mockResolvedValue(rooms);
+
+      await expect(service.searchRooms({})).resolves.toEqual(rooms);
+
+      expect(prisma.rooms.findMany).toHaveBeenCalledWith({
+        where: {},
+        orderBy: {
+          created_at: 'asc',
+        },
+      });
     });
 
-    it('should throw NotFoundException if room not found', async () => {
-        mockPrismaService.rooms.findUnique.mockResolvedValue(null);
-  
-        await expect(service.findOne(999)).rejects.toThrow('Room 999 not found');
-        expect(prisma.rooms.findUnique).toHaveBeenCalledWith({ where: { id: 999 } });
+    it('should convert is_active="false" into boolean false', async () => {
+      const filters = {
+        is_active: 'false',
+      };
+
+      mockPrismaService.rooms.findMany.mockResolvedValue([]);
+
+      await service.searchRooms(filters);
+
+      expect(prisma.rooms.findMany).toHaveBeenCalledWith({
+        where: {
+          is_active: false,
+        },
+        orderBy: {
+          created_at: 'asc',
+        },
+      });
     });
   });
 
-  // Test Suite for updating a room
-  // Verifies:
-  // 1. Success: Checks room exists, then calls prisma.update with correct ID and data.
-  // 2. Failure: Throws NotFoundException if the room does not exist.
-  describe('update', () => {
-    beforeEach(() => {
-      jest.clearAllMocks();
-    });
-    it('should update a room', async () => {
-      const dto: UpdateRoomDto = {
+  describe('findOne', () => {
+    it('should return a single room', async () => {
+      const result = {
+        id: 1,
         name: 'Standard Room 105',
         description: 'Standard room with garden view',
         capacity: 4,
         price_per_night: 2500,
         image_url: '/images/room105.jpg',
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockPrismaService.rooms.findUnique.mockResolvedValue(result);
+
+      await expect(service.findOne(1)).resolves.toEqual(result);
+      expect(prisma.rooms.findUnique).toHaveBeenCalledWith({
+        where: { id: 1 },
+      });
+    });
+
+    it('should throw NotFoundException if room not found', async () => {
+      mockPrismaService.rooms.findUnique.mockResolvedValue(null);
+
+      await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(999)).rejects.toThrow('Room 999 not found');
+
+      expect(prisma.rooms.findUnique).toHaveBeenCalledWith({
+        where: { id: 999 },
+      });
+    });
+  });
+
+  describe('disable', () => {
+    it('should disable a room', async () => {
+      const existingRoom = {
+        id: 1,
+        name: 'Room A',
+        description: 'Test room',
+        capacity: 2,
+        price_per_night: 1500,
+        image_url: '/images/room-a.jpg',
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      const updatedRoom = {
+        ...existingRoom,
+        is_active: false,
+      };
+
+      jest.spyOn(service, 'findOne').mockResolvedValue(existingRoom as any);
+      mockPrismaService.rooms.update.mockResolvedValue(updatedRoom);
+
+      await expect(service.disable(1)).resolves.toEqual(updatedRoom);
+
+      expect(service.findOne).toHaveBeenCalledWith(1);
+      expect(prisma.rooms.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { is_active: false },
+      });
+    });
+  });
+
+  describe('enable', () => {
+    it('should enable a room', async () => {
+      const existingRoom = {
+        id: 1,
+        name: 'Room A',
+        description: 'Test room',
+        capacity: 2,
+        price_per_night: 1500,
+        image_url: '/images/room-a.jpg',
+        is_active: false,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      const updatedRoom = {
+        ...existingRoom,
+        is_active: true,
+      };
+
+      jest.spyOn(service, 'findOne').mockResolvedValue(existingRoom as any);
+      mockPrismaService.rooms.update.mockResolvedValue(updatedRoom);
+
+      await expect(service.enable(1)).resolves.toEqual(updatedRoom);
+
+      expect(service.findOne).toHaveBeenCalledWith(1);
+      expect(prisma.rooms.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { is_active: true },
+      });
+    });
+  });
+
+  describe('update', () => {
+    it('should update a room', async () => {
+      const dto: UpdateRoomDto = {
+        name: 'Updated Room Name',
+        description: 'Updated description',
+        capacity: 4,
+        price_per_night: 2500,
+        image_url: '/images/updated-room.jpg',
         is_active: true,
       };
 
@@ -230,12 +375,7 @@ describe('RoomsService', () => {
 
       const result = {
         id: 1,
-        name: 'Standard Room 105',
-        description: 'Standard room with garden view',
-        capacity: 4,
-        price_per_night: 2500,
-        image_url: '/images/room105.jpg',
-        is_active: true,
+        ...dto,
         created_at: existingRoom.created_at,
         updated_at: new Date(),
       };
@@ -243,76 +383,67 @@ describe('RoomsService', () => {
       jest.spyOn(service, 'findOne').mockResolvedValue(existingRoom as any);
       mockPrismaService.rooms.update.mockResolvedValue(result);
 
-      expect(await service.update(1, dto)).toEqual(result);
+      await expect(service.update(1, dto)).resolves.toEqual(result);
 
       expect(service.findOne).toHaveBeenCalledWith(1);
-
       expect(prisma.rooms.update).toHaveBeenCalledWith({
         where: { id: 1 },
         data: {
           ...dto,
-          updated_at: expect.any(Date),
         },
       });
     });
 
-    it('should throw if room not found', async () => {
-      const dto: UpdateRoomDto = { name: 'Updated Room Name' };
+    it('should throw if room not found before update', async () => {
+      const dto: UpdateRoomDto = {
+        name: 'Updated Room Name',
+      };
 
       jest
         .spyOn(service, 'findOne')
         .mockRejectedValue(new NotFoundException('Room 999 not found'));
 
-      await expect(service.update(999, dto)).rejects.toThrow(
-        'Room 999 not found',
-      );
-
+      await expect(service.update(999, dto)).rejects.toThrow(NotFoundException);
       expect(service.findOne).toHaveBeenCalledWith(999);
       expect(prisma.rooms.update).not.toHaveBeenCalled();
     });
   });
-  
-    // Test Suite for deleting a room
-    // Verifies:
-    // 1. Success: Calls prisma.delete with correct ID.
-    // 2. Failure: Throws an error if the record is not found (simulated rejection).
-    describe('remove', () => {
-      it('should delete a room', async () => {
-        const existingRoom = {
-          id: 1,
-          name: 'Standard Room 105',
-          description: 'Standard room with garden view',
-          capacity: 4,
-          price_per_night: 2500,
-          image_url: '/images/room105.jpg',
-          is_active: true,
-          created_at: new Date(),
-          updated_at: new Date(),
-        };
-        const result = {
-          id: 1,
-          name: 'Standard Room 105',
-          description: 'Standard room with garden view',
-          capacity: 4,
-          price_per_night: 2500,
-          image_url: '/images/room105.jpg',
-          is_active: true,
-          created_at: new Date(),
-          updated_at: new Date(),
-        };
-        jest.spyOn(service, 'findOne').mockResolvedValue(existingRoom as any);
-        mockPrismaService.rooms.delete.mockResolvedValue(result);
-        
-        expect(await service.remove(1)).toBe(result);
-        expect(prisma.rooms.delete).toHaveBeenCalledWith({ where: { id: 1 } });
-      });
-      it('should throw if room not found', async () => {
-        jest
-          .spyOn(service, 'findOne')
-          .mockRejectedValue(new NotFoundException('Room 999 not found'));
-        await expect(service.remove(999)).rejects.toThrow(
-          'Room 999 not found',
-        );
+
+  describe('remove', () => {
+    it('should delete a room', async () => {
+      const existingRoom = {
+        id: 1,
+        name: 'Standard Room 105',
+        description: 'Standard room with garden view',
+        capacity: 4,
+        price_per_night: 2500,
+        image_url: '/images/room105.jpg',
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      const result = { ...existingRoom };
+
+      jest.spyOn(service, 'findOne').mockResolvedValue(existingRoom as any);
+      mockPrismaService.rooms.delete.mockResolvedValue(result);
+
+      await expect(service.remove(1)).resolves.toEqual(result);
+
+      expect(service.findOne).toHaveBeenCalledWith(1);
+      expect(prisma.rooms.delete).toHaveBeenCalledWith({
+        where: { id: 1 },
       });
     });
+
+    it('should throw if room not found before delete', async () => {
+      jest
+        .spyOn(service, 'findOne')
+        .mockRejectedValue(new NotFoundException('Room 999 not found'));
+
+      await expect(service.remove(999)).rejects.toThrow(NotFoundException);
+      expect(service.findOne).toHaveBeenCalledWith(999);
+      expect(prisma.rooms.delete).not.toHaveBeenCalled();
+    });
+  });
 });

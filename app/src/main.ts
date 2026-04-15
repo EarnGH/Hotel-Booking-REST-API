@@ -17,9 +17,6 @@ async function bootstrap() {
     [
       'API for managing rooms within Hotel Booking System.',
       '',
-      'Rate limiting:',
-      '- 100 requests per minute.',
-      '- Exceeding the limit returns 429 Too Many Requests with a standard error body.',
     ].join('\n'),
   )
     .setVersion('1.0.0')

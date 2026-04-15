@@ -1,1 +1,1342 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/6_HpDRB5)
+# Hotel Booking REST API System
+
+## Project Overview
+
+This project implements a RESTful API for a hotel booking system using NestJS. The system supports user authentication, role-based access control (RBAC), room management, booking operations, and search functionality.
+
+The system is designed following practical backend development principles, including:
+
+- Secure authentication using JWT and password hashing
+- Role-based authorization (Admin and User)
+- Caching and rate limiting for performance and protection
+- Automated testing (Unit, Integration, and End-to-End)
+- Containerized deployment using Docker
+
+---
+
+## System Architecture
+
+The application follows a modular architecture using NestJS modules. Each module is responsible for a specific domain:
+
+- Auth Module – Handles user authentication and JWT generation
+- Users Module – Manages user data and profiles
+- Rooms Module – Provides room management and search functionality
+- Bookings Module – Handles booking logic, validation, and status updates
+- Notifications Module – Tracks booking-related events
+- Health Module – Provides system health monitoring
+- Prisma Module – Handles database access via Prisma ORM
+- Security Module – Provides JWT services and role-based guards
+
+### Tech Stack
+
+- Backend Framework: NestJS
+- Language: TypeScript
+- Database: MySQL (via Prisma ORM)
+- Authentication: JSON Web Token (JWT)
+- Caching: Redis
+- Rate Limiting: NestJS Throttler
+- Testing: Jest and Supertest
+- Containerization: Docker and Docker Compose
+
+---
+## Environment Setup and Installation
+
+This section explains how to set up the project from scratch and run it locally.
+
+---
+
+### 1. Clone the Repository
+
+```bash
+git clone <repository-link>
+cd <repository-folder>/app
+```
+
+---
+
+### 2. Install Dependencies
+
+From inside the `app/` folder:
+
+```bash
+npm install
+```
+
+---
+
+### 3. Configure Environment Variables
+
+This project uses different environment files for local development and Docker.
+
+Create the following files before running the application.
+
+---
+
+#### 3.1 `app/.env` (Local Development)
+
+Create a file named `.env` inside the `app/` folder:
+
+```env
+DATABASE_URL="mysql://<mysql_user>:<mysql_password>@localhost:3307/<mysql_database>"
+JWT_SECRET="<your_jwt_secret>"
+PORT=3000
+REDIS_HOST=localhost
+REDIS_PORT=6379
+```
+
+**Purpose:**
+- Used when running the NestJS backend locally
+- MySQL and Redis run in Docker, but the backend connects to them through `localhost`
+- MySQL uses port `3307` because the container port `3306` is mapped to local port `3307`
+
+---
+
+#### 3.2 `app/.env.docker` (Docker Backend Environment)
+
+Create a file named `.env.docker` inside the `app/` folder:
+
+```env
+DATABASE_URL="mysql://<mysql_user>:<mysql_password>@mysql:3306/<mysql_database>"
+JWT_SECRET="<your_jwt_secret>"
+PORT=3000
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
+
+**Purpose:**
+- Used when the backend itself runs inside Docker
+- The backend connects to MySQL and Redis using Docker service names (`mysql`, `redis`)
+
+---
+
+#### 3.3 `infra/.env` (Docker Compose Infrastructure Environment)
+
+Create a file named `.env` inside the `infra/` folder:
+
+```env
+DATABASE_URL=mysql://<mysql_user>:<mysql_password>@mysql:3306/<mysql_database>
+MYSQL_ROOT_PASSWORD=<mysql_root_password>
+MYSQL_DATABASE=<mysql_database>
+MYSQL_USER=<mysql_user>
+MYSQL_PASSWORD=<mysql_password>
+```
+
+Example with matching development values:
+
+```env
+DATABASE_URL=mysql://appuser:apppass@mysql:3306/final_project_db
+MYSQL_ROOT_PASSWORD=rootpass
+MYSQL_DATABASE=final_project_db
+MYSQL_USER=appuser
+MYSQL_PASSWORD=apppass
+```
+
+**Purpose:**
+- Used by `docker-compose.yml`
+- Configures the MySQL container and build-time database connection settings
+- Must stay consistent with `app/.env` and `app/.env.docker`
+
+---
+
+### 4. Start Supporting Services
+
+Before running the backend locally, MySQL and Redis must already be running.
+
+From inside the `app/` folder, move to the `infra/` folder:
+
+```bash
+cd ../infra
+```
+
+Start only the supporting services:
+
+```bash
+docker compose up --build mysql redis
+```
+
+Or in detached mode:
+
+```bash
+docker compose up --build -d mysql redis
+```
+
+This starts:
+
+- `final_project_mysql`
+- `final_project_redis`
+
+Then move back to the `app/` folder:
+
+```bash
+cd ../app
+```
+
+At this point:
+
+- MySQL should be available at `localhost:3307`
+- Redis should be available at `localhost:6379`
+
+---
+
+### 5. Prepare Prisma
+
+From inside the `app/` folder, generate Prisma Client:
+
+```bash
+npx prisma generate
+```
+
+Then push the schema to the database:
+
+```bash
+npx prisma db push
+```
+
+These commands use the `DATABASE_URL` from `app/.env`.
+
+---
+
+### 6. Seed Initial Data (Optional)
+
+This project includes a Prisma seed configuration. If you want to insert initial sample data, first build the project:
+
+```bash
+npm run build
+```
+
+Then run:
+
+```bash
+npx prisma db seed
+```
+
+This step is optional, but useful when you want preloaded sample records such as users or rooms.
+
+---
+
+### 7. Run the Application Locally
+
+From inside the `app/` folder:
+
+```bash
+npm run start:dev
+```
+
+The API should then be available at:
+
+```text
+http://localhost:3000
+```
+
+Swagger documentation:
+
+```text
+http://localhost:3000/api-docs
+```
+
+Health check endpoint:
+
+```text
+http://localhost:3000/health
+```
+
+---
+
+### 8. Run the Full Application with Docker
+
+If you want to run the backend together with MySQL and Redis in Docker, go from `app/` to `infra/`:
+
+```bash
+cd ../infra
+```
+
+Then run:
+
+```bash
+docker compose up --build
+```
+
+This starts all services:
+
+- `final_project_app`
+- `final_project_mysql`
+- `final_project_redis`
+
+In this setup, the backend uses `app/.env.docker`, while Docker Compose uses `infra/.env`.
+
+---
+
+### 9. Summary of Environment Files
+
+#### `app/.env`
+Used when running the backend locally.
+
+- API runs on your machine
+- MySQL is accessed through `localhost:3307`
+- Redis is accessed through `localhost:6379`
+
+#### `app/.env.docker`
+Used when the backend runs inside Docker.
+
+- MySQL is accessed through Docker service name `mysql`
+- Redis is accessed through Docker service name `redis`
+
+#### `infra/.env`
+Used by Docker Compose.
+
+- Configures MySQL container credentials
+- Provides database connection settings for Docker-based execution
+
+---
+
+### 10. Recommended Local Setup Order
+
+```bash
+git clone <repository-link>
+cd <repository-folder>/app
+npm install
+cd ../infra
+docker compose up --build -d mysql redis
+cd ../app
+npx prisma generate
+npx prisma db push
+npm run build
+npx prisma db seed
+npm run start:dev
+```
+
+If you do not need seed data, you may skip:
+
+```bash
+npm run build
+npx prisma db seed
+```
+---
+## API Usage Examples
+
+This section provides example requests for the main API groups: authentication, rooms, bookings, users, and notifications.
+
+For protected endpoints, include the JWT token in the request header:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+---
+
+### 1. Authentication
+
+#### Register a Regular User
+
+**Endpoint**
+
+```http
+POST /auth/register
+```
+
+**Request Body**
+
+```json
+{
+  "username": "john_doe",
+  "password": "password123",
+  "role": "user"
+}
+```
+
+**Example Response**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "username": "john_doe",
+    "role": "user"
+  }
+}
+```
+
+---
+
+#### Register an Admin
+
+**Endpoint**
+
+```http
+POST /auth/register
+```
+
+**Request Body**
+
+```json
+{
+  "username": "admin_demo",
+  "password": "password123",
+  "role": "admin"
+}
+```
+
+**Example Response**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 2,
+    "username": "admin_demo",
+    "role": "admin"
+  }
+}
+```
+
+---
+
+#### Login
+
+**Endpoint**
+
+```http
+POST /auth/login
+```
+
+**Request Body**
+
+```json
+{
+  "username": "john_doe",
+  "password": "password123"
+}
+```
+
+**Example Response**
+
+```json
+{
+  "access_token": "your_jwt_token_here"
+}
+```
+
+---
+
+#### Logout
+
+**Endpoint**
+
+```http
+POST /auth/logout
+```
+
+**Description**
+
+This endpoint returns a logout success message. In the current implementation, logout on the client side is handled by removing the stored JWT token.
+
+**Example Response**
+
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+---
+
+### 2. Rooms
+
+#### Create a Room (Admin Only)
+
+**Endpoint**
+
+```http
+POST /rooms
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+**Request Body**
+
+```json
+{
+  "name": "Ocean View Suite",
+  "description": "A comfortable ocean-facing room.",
+  "capacity": 2,
+  "price_per_night": 1800,
+  "image_url": "/images/ocean-view-suite.jpg",
+  "is_active": true
+}
+```
+
+**Example Response**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "Ocean View Suite",
+    "description": "A comfortable ocean-facing room.",
+    "capacity": 2,
+    "price_per_night": 1800,
+    "image_url": "/images/ocean-view-suite.jpg",
+    "is_active": true
+  }
+}
+```
+
+---
+
+#### Get All Rooms
+
+**Endpoint**
+
+```http
+GET /rooms
+```
+
+**Description**
+
+Returns all rooms in the system.
+
+---
+
+#### Search Rooms
+
+**Endpoint**
+
+```http
+GET /rooms/search
+```
+
+**Example Query**
+
+```http
+GET /rooms/search?keyword=Ocean&is_active=true&min_capacity=2&max_price=2000&limit=10&offset=0
+```
+
+**Description**
+
+This endpoint searches rooms by keyword and filters them by active status, minimum capacity, maximum price, and pagination.
+
+---
+
+#### Get Room by ID
+
+**Endpoint**
+
+```http
+GET /rooms/:id
+```
+
+**Example**
+
+```http
+GET /rooms/1
+```
+
+---
+
+#### Update a Room (Admin Only)
+
+**Endpoint**
+
+```http
+PUT /rooms/:id
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+**Example Request Body**
+
+```json
+{
+  "name": "Updated Ocean View Suite",
+  "description": "Updated room description.",
+  "capacity": 3,
+  "price_per_night": 2200,
+  "image_url": "/images/updated-ocean-view-suite.jpg",
+  "is_active": true
+}
+```
+
+---
+
+#### Disable a Room (Admin Only)
+
+**Endpoint**
+
+```http
+PATCH /rooms/:id/disable
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+---
+
+#### Enable a Room (Admin Only)
+
+**Endpoint**
+
+```http
+PATCH /rooms/:id/enable
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+---
+
+#### Delete a Room (Admin Only)
+
+**Endpoint**
+
+```http
+DELETE /rooms/:id
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+---
+
+### 3. Bookings
+
+#### Create a Booking
+
+**Endpoint**
+
+```http
+POST /bookings
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <user_token>
+```
+
+**Request Body**
+
+```json
+{
+  "room_id": 1,
+  "start_date": "2026-05-20",
+  "end_date": "2026-05-22",
+  "guest_count": 2
+}
+```
+
+**Description**
+
+Creates a booking for the authenticated user. New bookings are created with `PENDING` status by default.
+
+---
+
+#### Get My Bookings
+
+**Endpoint**
+
+```http
+GET /bookings
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <user_token>
+```
+
+**Description**
+
+- Regular users receive only their own bookings
+- Admins receive all bookings
+
+---
+
+#### Search Bookings
+
+**Endpoint**
+
+```http
+GET /bookings/search
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <user_token>
+```
+
+**Example Query**
+
+```http
+GET /bookings/search?room_id=1&status=PENDING&start_date=2026-05-01&end_date=2026-05-30&limit=10&offset=0
+```
+
+---
+
+#### Get Booking by ID
+
+**Endpoint**
+
+```http
+GET /bookings/:id
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <user_token>
+```
+
+---
+
+#### Update My Booking
+
+**Endpoint**
+
+```http
+PUT /bookings/:id
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <user_token>
+```
+
+**Example Request Body**
+
+```json
+{
+  "room_id": 2,
+  "start_date": "2026-05-21",
+  "end_date": "2026-05-23",
+  "guest_count": 3
+}
+```
+
+---
+
+#### Admin Update Booking
+
+**Endpoint**
+
+```http
+PUT /bookings/:id/admin
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+**Example Request Body**
+
+```json
+{
+  "status": "APPROVED"
+}
+```
+
+**Possible statuses**
+- `PENDING`
+- `APPROVED`
+- `CANCELLED`
+- `PAID`
+
+---
+
+#### Delete a Booking
+
+**Endpoint**
+
+```http
+DELETE /bookings/:id
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <user_token>
+```
+
+**Description**
+
+- Regular users can delete only their own bookings
+- Admins can delete any booking
+
+---
+
+### 4. Users
+
+#### Get Current User Profile
+
+**Endpoint**
+
+```http
+GET /users/me
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <access_token>
+```
+
+---
+
+#### Update Current User Profile
+
+**Endpoint**
+
+```http
+PUT /users/me
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <access_token>
+```
+
+**Example Request Body**
+
+```json
+{
+  "username": "john_doe_new"
+}
+```
+
+---
+
+#### Get All Users (Admin Only)
+
+**Endpoint**
+
+```http
+GET /users
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+---
+
+#### Get User by ID (Admin Only)
+
+**Endpoint**
+
+```http
+GET /users/:id
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+---
+
+#### Admin Update User (Admin Only)
+
+**Endpoint**
+
+```http
+PUT /users/:id/admin
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+**Example Request Body**
+
+```json
+{
+  "username": "john_doe_updated",
+  "role": "admin"
+}
+```
+
+---
+
+#### Delete User (Admin Only)
+
+**Endpoint**
+
+```http
+DELETE /users/:id
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <admin_token>
+```
+
+---
+
+### 5. Notifications
+
+#### Get Notifications
+
+**Endpoint**
+
+```http
+GET /notifications
+```
+
+**Headers**
+
+```http
+Authorization: Bearer <access_token>
+```
+
+**Description**
+
+- Regular users receive only their own notifications
+- Admins receive all notifications
+
+**Example Response**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "user_id": 2,
+      "booking_id": 5,
+      "type": "BOOKING_CREATED",
+      "message": "Booking #5 has been created successfully.",
+      "created_at": "2026-04-14T10:45:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+## Example End-to-End Flow
+
+The following example shows a realistic flow from registration to room booking, notification retrieval, and booking deletion.
+
+### Step 1: Admin registers
+
+```http
+POST /auth/register
+```
+
+```json
+{
+  "username": "admin_demo",
+  "password": "password123",
+  "role": "admin"
+}
+```
+
+---
+
+### Step 2: Admin logs in
+
+```http
+POST /auth/login
+```
+
+```json
+{
+  "username": "admin_demo",
+  "password": "password123"
+}
+```
+
+Save the returned token as `<admin_token>`.
+
+---
+
+### Step 3: Admin creates a room
+
+```http
+POST /rooms
+Authorization: Bearer <admin_token>
+```
+
+```json
+{
+  "name": "Ocean View Suite",
+  "description": "A comfortable ocean-facing room.",
+  "capacity": 2,
+  "price_per_night": 1800,
+  "image_url": "/images/ocean-view-suite.jpg",
+  "is_active": true
+}
+```
+
+Assume the returned room ID is `1`.
+
+---
+
+### Step 4: Regular user registers
+
+```http
+POST /auth/register
+```
+
+```json
+{
+  "username": "john_doe",
+  "password": "password123",
+  "role": "user"
+}
+```
+
+---
+
+### Step 5: Regular user logs in
+
+```http
+POST /auth/login
+```
+
+```json
+{
+  "username": "john_doe",
+  "password": "password123"
+}
+```
+
+Save the returned token as `<user_token>`.
+
+---
+
+### Step 6: User searches rooms
+
+```http
+GET /rooms/search?keyword=Ocean&is_active=true&min_capacity=2&max_price=2000&limit=10&offset=0
+```
+
+---
+
+### Step 7: User creates a booking
+
+```http
+POST /bookings
+Authorization: Bearer <user_token>
+```
+
+```json
+{
+  "room_id": 1,
+  "start_date": "2026-05-20",
+  "end_date": "2026-05-22",
+  "guest_count": 2
+}
+```
+
+---
+
+### Step 8: User checks own bookings
+
+```http
+GET /bookings
+Authorization: Bearer <user_token>
+```
+
+---
+
+### Step 9: User checks notifications
+
+```http
+GET /notifications
+Authorization: Bearer <user_token>
+```
+
+At this point, the user should see a notification such as:
+
+```json
+{
+  "type": "BOOKING_CREATED",
+  "message": "Booking #1 has been created successfully."
+}
+```
+
+---
+
+### Step 10: User deletes the booking
+
+```http
+DELETE /bookings/1
+Authorization: Bearer <user_token>
+```
+
+---
+
+### Step 11: User checks notifications again
+
+```http
+GET /notifications
+Authorization: Bearer <user_token>
+```
+
+At this point, the user should also see a deletion-related notification recorded by the system.
+
+This flow is also used as the basis of the end-to-end test implementation.
+---
+
+## Testing
+
+All tests in this project are executed **locally** using Node.js, while MySQL and Redis run in Docker containers.
+
+This means:
+- The backend application runs locally (`npm run test:*`)
+- Only supporting services (MySQL and Redis) are started via Docker
+- The full Docker setup (`docker compose up --build`) is **not required** for testing
+
+The application connects to MySQL via `localhost:3307` and Redis via `localhost:6379` during testing.
+
+---
+
+### Prerequisites
+
+Before running any tests, ensure that MySQL and Redis are running:
+
+```bash
+cd ../infra
+docker compose up -d mysql redis
+cd ../app
+```
+
+These services provide the database and cache required for integration and E2E testing.
+
+---
+
+### Test Commands
+
+Run the following commands from the `app/` folder:
+
+```bash
+npm run test:unit
+npm run test:integration
+npm run test:e2e
+npm run test:all
+```
+
+---
+
+### 1. Unit Testing
+
+**Purpose**
+
+Unit tests verify core business logic in isolation by mocking dependencies.
+
+**Scope**
+
+- Booking validation logic
+- Date conflict detection
+- Role-based authorization logic
+- Status transitions (e.g., PENDING → APPROVED)
+
+**Implementation**
+
+- Located inside `src/` folders as:
+  - `*.service.spec.ts`
+  - `*.controller.spec.ts`
+- Uses:
+  - `@nestjs/testing`
+  - `jest.fn()` for mocking services
+- Does not use real database or external services
+
+**Example**
+
+- BookingService prevents overlapping bookings
+- Controller correctly wraps responses
+
+---
+
+### 2. Integration Testing
+
+**Purpose**
+
+Integration tests verify that API endpoints work correctly with real services and database.
+
+**Scope**
+
+- User registration and login
+- Room CRUD operations (Admin)
+- Booking creation and conflict prevention
+- Booking retrieval and search
+- Authorization behavior
+
+**Implementation**
+
+- Located in:
+
+```text
+test/integration/
+```
+
+- Uses:
+  - Real Prisma + MySQL database
+  - `supertest` for HTTP testing
+- Tests full request flow:
+  - Controller → Service → Database
+
+---
+
+**Prerequisites**
+
+Before running integration tests:
+
+- MySQL and Redis containers must be running:
+
+```bash
+cd ../infra
+docker compose up -d mysql redis
+cd ../app
+```
+
+- Database schema must already be initialized (see Environment Setup section)
+
+---
+
+**Cleanup**
+
+- Each test cleans up inserted data using Prisma
+- Prevents data contamination between test runs
+- Ensures tests are repeatable and independent
+
+---
+
+### 3. End-to-End (E2E) Testing
+
+**Purpose**
+
+E2E tests simulate real user behavior across the full system.
+
+**Scope**
+
+- Full user flow:
+  - Register → Login → Search Rooms → Create Booking → Delete Booking
+- Validates:
+  - API responses
+  - Database state
+  - Notification generation
+
+**Implementation**
+
+- Located in:
+
+```text
+test/booking-flow.e2e-spec.ts
+```
+
+- Uses:
+  - Full NestJS application
+  - Real database
+  - `supertest`
+
+**Example Flow**
+
+1. Admin registers and logs in
+2. Admin creates a room
+3. User registers and logs in
+4. User searches available rooms
+5. User creates a booking
+6. User retrieves bookings
+7. User deletes booking
+8. System verifies notifications
+
+---
+
+### Test Data Cleanup
+
+All tests ensure cleanup after execution:
+
+- Users, rooms, bookings, and notifications are deleted after each test
+- Prevents interference between test runs
+- Ensures repeatable results
+
+---
+
+### Notes
+
+- Unit tests do not require database
+- Integration and E2E tests require:
+  - MySQL running in Docker
+  - Prisma schema initialized
+- If Docker volume is reset, reinitialize database:
+
+```bash
+npx prisma generate
+npx prisma db push
+```
+
+### Test Results
+
+All test categories were executed successfully using the provided npm scripts.
+
+**Summary**
+
+- Unit Tests: Passed
+- Integration Tests: Passed
+- End-to-End (E2E) Tests: Passed
+
+The tests cover:
+- Core business logic (validation, conflict detection, role checks)
+- API endpoint behavior with real database interaction
+- Full user workflow from registration to booking and deletion
+
+---
+
+**Sample Output**
+
+```bash
+PASS  test/booking-flow.e2e-spec.ts
+Test Suites: 1 passed, 1 total
+Tests:       1 passed, 1 total
+```
+
+---
+
+**Result Interpretation**
+
+- All endpoints behave as expected under test conditions
+- Database state is correctly updated and verified during tests
+- The system successfully handles real-world scenarios such as:
+  - user registration and authentication
+  - room management
+  - booking creation and deletion
+  - notification generation
+
+These results demonstrate that the system meets the requirements for reliability and maintainability as specified in NFR-13.
+
+## 👥 Team
+
+68_Group16  
+6688125 Nanthit Temkulkiat

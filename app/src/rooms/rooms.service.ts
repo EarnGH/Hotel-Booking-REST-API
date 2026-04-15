@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException, LoggerService, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,23 +28,31 @@ export class RoomsService {
 
   async create(createRoomDto: CreateRoomDto) {
     this.logger.log(`Creating room: ${createRoomDto.name}`);
-    try{
+
+    try {
       const room = await this.prisma.rooms.create({
         data: {
           ...createRoomDto,
           is_active: createRoomDto.is_active ?? true,
-        }
+        },
       });
-      return this.format_room(room)
-    } catch( e: any ){
-      this.logger.error(`Create failed`);
+
+      return this.format_room(room);
+    } catch (e: any) {
+      this.logger.error('Create failed');
       throw new BadRequestException(e?.message ?? 'Create failed');
     }
   }
 
   async findAll() {
-    this.logger.log(`Fetching all rooms`);
-    const rooms = await this.prisma.rooms.findMany();
+    this.logger.log('Fetching all rooms');
+
+    const rooms = await this.prisma.rooms.findMany({
+      orderBy: {
+        created_at: 'asc',
+      },
+    });
+
     return this.format_rooms(rooms);
   }
 
@@ -102,24 +115,27 @@ export class RoomsService {
       },
     });
 
-    return {
-      success: true,
-      data: this.format_rooms(rooms),
-    };
+    return this.format_rooms(rooms);
   }
 
   async findOne(id: number) {
     this.logger.log(`Fetching room id=${id}`);
-    const room  = await this.prisma.rooms.findUnique({ where: { id } });
-    if (!room){
-      this.logger.warn(`Room ${id} not found`)
+
+    const room = await this.prisma.rooms.findUnique({
+      where: { id },
+    });
+
+    if (!room) {
+      this.logger.warn(`Room ${id} not found`);
       throw new NotFoundException(`Room ${id} not found`);
     }
-    return room;
+
+    return this.format_room(room);
   }
 
-  async disable(id: number){
+  async disable(id: number) {
     this.logger.log(`Disabling room id=${id}`);
+
     await this.findOne(id);
 
     const room = await this.prisma.rooms.update({
@@ -130,8 +146,9 @@ export class RoomsService {
     return this.format_room(room);
   }
 
-  async enable(id: number){
+  async enable(id: number) {
     this.logger.log(`Enabling room id=${id}`);
+
     await this.findOne(id);
 
     const room = await this.prisma.rooms.update({
@@ -151,7 +168,6 @@ export class RoomsService {
       where: { id },
       data: {
         ...updateRoomDto,
-        updated_at: new Date(),
       },
     });
 
@@ -163,10 +179,10 @@ export class RoomsService {
 
     await this.findOne(id);
 
-    const room = this.prisma.rooms.delete({
-      where: { id }
+    const room = await this.prisma.rooms.delete({
+      where: { id },
     });
 
-    return room;
+    return this.format_room(room);
   }
 }
