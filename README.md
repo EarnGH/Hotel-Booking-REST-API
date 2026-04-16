@@ -77,8 +77,8 @@ Create the following files before running the application.
 Create a file named `.env` inside the `app/` folder:
 
 ```env
-DATABASE_URL="mysql://<mysql_user>:<mysql_password>@localhost:3307/<mysql_database>"
-JWT_SECRET="<your_jwt_secret>"
+DATABASE_URL=mysql://<mysql_user>:<mysql_password>@localhost:3307/<mysql_database>
+JWT_SECRET=<your_jwt_secret>
 PORT=3000
 REDIS_HOST=localhost
 REDIS_PORT=6379
@@ -96,8 +96,8 @@ REDIS_PORT=6379
 Create a file named `.env.docker` inside the `app/` folder:
 
 ```env
-DATABASE_URL="mysql://<mysql_user>:<mysql_password>@mysql:3306/<mysql_database>"
-JWT_SECRET="<your_jwt_secret>"
+DATABASE_URL=mysql://<mysql_user>:<mysql_password>@mysql:3306/<mysql_database>
+JWT_SECRET=<your_jwt_secret>
 PORT=3000
 REDIS_HOST=redis
 REDIS_PORT=6379
@@ -138,7 +138,7 @@ MYSQL_PASSWORD=apppass
 
 ---
 
-### 4. Start Supporting Services
+### 4. Start Supporting Services (If you want to run with docker, you can skip to Step 8)
 
 Before running the backend locally, MySQL and Redis must already be running.
 
