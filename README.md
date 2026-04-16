@@ -54,17 +54,7 @@ cd 682-project-68_group16/app
 
 ---
 
-### 2. Install Dependencies
-
-From inside the `app/` folder:
-
-```bash
-npm install
-```
-
----
-
-### 3. Configure Environment Variables
+### 2. Configure Environment Variables
 
 This project uses different environment files for local development and Docker.
 
@@ -72,7 +62,7 @@ Create the following files before running the application.
 
 ---
 
-#### 3.1 `app/.env` (Local Development)
+#### 2.1 `app/.env` (Local Development)
 
 Create a file named `.env` inside the `app/` folder:
 
@@ -91,7 +81,7 @@ REDIS_PORT=6379
 
 ---
 
-#### 3.2 `app/.env.docker` (Docker Backend Environment)
+#### 2.2 `app/.env.docker` (Docker Backend Environment)
 
 Create a file named `.env.docker` inside the `app/` folder:
 
@@ -109,7 +99,7 @@ REDIS_PORT=6379
 
 ---
 
-#### 3.3 `infra/.env` (Docker Compose Infrastructure Environment)
+#### 2.3 `infra/.env` (Docker Compose Infrastructure Environment)
 
 Create a file named `.env` inside the `infra/` folder:
 
@@ -138,7 +128,17 @@ MYSQL_PASSWORD=apppass
 
 ---
 
-### 4. Start Supporting Services (If you want to run with docker, you can skip to Step 8)
+### 3. Install Dependencies (If you want to run with docker, you can skip this to Step 8)
+
+From inside the `app/` folder:
+
+```bash
+npm install
+```
+
+---
+
+### 4. Start Supporting Services
 
 Before running the backend locally, MySQL and Redis must already be running.
 
