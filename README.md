@@ -48,8 +48,8 @@ This section explains how to set up the project from scratch and run it locally.
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-link>
-cd <repository-folder>/app
+git clone https://github.com/MUICT-Class/682-project-68_group16.git
+cd 682-project-68_group16/app
 ```
 
 ---
@@ -292,8 +292,8 @@ Used by Docker Compose.
 ### 10. Recommended Local Setup Order
 
 ```bash
-git clone <repository-link>
-cd <repository-folder>/app
+git clone https://github.com/MUICT-Class/682-project-68_group16.git
+cd 682-project-68_group16/app
 npm install
 cd ../infra
 docker compose up --build -d mysql redis
