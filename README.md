@@ -48,7 +48,7 @@ This section explains how to set up the project from scratch and run it locally.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/MUICT-Class/682-project-68_group16.git
+git clone https://github.com/EarnGH/Hotel-Booking-REST-API.git
 cd 682-project-68_group16/app
 ```
 
@@ -292,7 +292,7 @@ Used by Docker Compose.
 ### 10. Recommended Local Setup Order
 
 ```bash
-git clone https://github.com/MUICT-Class/682-project-68_group16.git
+git clone https://github.com/EarnGH/Hotel-Booking-REST-API.git
 cd 682-project-68_group16/app
 npm install
 cd ../infra
