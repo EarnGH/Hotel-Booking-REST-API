@@ -153,7 +153,16 @@ describe('RoomsController', () => {
       mockRoomsService.searchRooms.mockResolvedValue(rooms);
 
       await expect(
-        controller.searchRooms('room', 'true', '2', '3500', '10', '0'),
+        controller.searchRooms(
+          'room',
+          'true',
+          '2',
+          '3500',
+          '2026-04-20',
+          '2026-04-25',
+          '10',
+          '0',
+        ),
       ).resolves.toEqual({
         success: true,
         data: rooms,
@@ -164,6 +173,8 @@ describe('RoomsController', () => {
         is_active: 'true',
         min_capacity: '2',
         max_price: '3500',
+        from_date: '2026-04-20',
+        to_date: '2026-04-25',
         limit: '10',
         offset: '0',
       });
@@ -175,7 +186,16 @@ describe('RoomsController', () => {
       mockRoomsService.searchRooms.mockResolvedValue(rooms);
 
       await expect(
-        controller.searchRooms('penthouse', 'true', '10', '1000', '10', '0'),
+        controller.searchRooms(
+          'penthouse',
+          'true',
+          '10',
+          '1000',
+          '2026-04-20',
+          '2026-04-25',
+          '10',
+          '0',
+        ),
       ).resolves.toEqual({
         success: true,
         data: rooms,
@@ -186,6 +206,8 @@ describe('RoomsController', () => {
         is_active: 'true',
         min_capacity: '10',
         max_price: '1000',
+        from_date: '2026-04-20',
+        to_date: '2026-04-25',
         limit: '10',
         offset: '0',
       });

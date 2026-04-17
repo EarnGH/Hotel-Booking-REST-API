@@ -208,6 +208,20 @@ export class RoomsController {
     example: 2000,
   })
   @ApiQuery({
+    name: 'from_date',
+    required: false,
+    type: String,
+    description: 'Check-in date (ISO format: YYYY-MM-DD). Only returns rooms available for this date range.',
+    example: '2026-04-20',
+  })
+  @ApiQuery({
+    name: 'to_date',
+    required: false,
+    type: String,
+    description: 'Check-out date (ISO format: YYYY-MM-DD). Must be after from_date.',
+    example: '2026-04-25',
+  })
+  @ApiQuery({
     name: 'limit',
     required: false,
     type: Number,
@@ -272,12 +286,15 @@ export class RoomsController {
       },
     },
   })
+  @ApiResponse({ status: 400, description: 'Bad Request - Invalid date range or format' })
   @ApiResponse({ status: 429, description: 'Too Many Requests' })
   async searchRooms(
     @Query('keyword') keyword?: string,
     @Query('is_active') is_active?: string,
     @Query('min_capacity') min_capacity?: string,
     @Query('max_price') max_price?: string,
+    @Query('from_date') from_date?: string,
+    @Query('to_date') to_date?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
@@ -286,6 +303,8 @@ export class RoomsController {
       is_active,
       min_capacity,
       max_price,
+      from_date,
+      to_date,
       limit,
       offset,
     });

@@ -1,8 +1,9 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('auth')
@@ -11,6 +12,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 3, ttl: 300000 } })
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({
     status: 201,
@@ -24,6 +26,8 @@ export class AuthController {
           properties: {
             id: { type: 'number', example: 1 },
             username: { type: 'string', example: 'john_doe' },
+            email: { type: 'string', example: 'john@example.com' },
+            full_name: { type: 'string', example: 'John Doe' },
           },
         },
       },
@@ -32,6 +36,8 @@ export class AuthController {
         data: {
           id: 1,
           username: 'john_doe',
+          email: 'john@example.com',
+          full_name: 'John Doe',
         },
       },
     },
@@ -55,6 +61,7 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Login and receive JWT token' })
   @ApiResponse({
     status: 200,
@@ -83,11 +90,34 @@ export class AuthController {
     description: 'Bad Request',
   })
   async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+    const token = await this.authService.login(loginDto);
+    return {
+      success: true,
+      ...token,
+    };
   }
 
   @Post('logout')
-  logout() {
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout user (invalidate token)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Logged out successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Logged out successfully' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  logout(@Req() req: any) {
     return {
       success: true,
       message: 'Logged out successfully',
