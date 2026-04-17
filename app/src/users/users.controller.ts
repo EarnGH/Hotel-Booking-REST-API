@@ -50,6 +50,8 @@ export class UsersController {
             properties: {
               id: { type: 'number', example: 1 },
               username: { type: 'string', example: 'john_doe' },
+              email: { type: 'string', example: 'john@example.com' },
+              full_name: { type: 'string', example: 'John Doe' },
               role: { type: 'string', example: 'user' },
               created_at: {
                 type: 'string',
@@ -95,6 +97,8 @@ export class UsersController {
           properties: {
             id: { type: 'number', example: 2 },
             username: { type: 'string', example: 'john_doe' },
+            email: { type: 'string', example: 'john@example.com' },
+            full_name: { type: 'string', example: 'John Doe' },
             role: { type: 'string', example: 'user' },
             created_at: {
               type: 'string',
@@ -139,6 +143,8 @@ export class UsersController {
           properties: {
             id: { type: 'number', example: 2 },
             username: { type: 'string', example: 'john_doe' },
+            email: { type: 'string', example: 'john@example.com' },
+            full_name: { type: 'string', example: 'John Doe' },
             role: { type: 'string', example: 'user' },
             created_at: {
               type: 'string',
@@ -171,7 +177,7 @@ export class UsersController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.USER)
-  @ApiOperation({ summary: 'Update current user username' })
+  @ApiOperation({ summary: 'Update current user profile (username, email, full_name)' })
   @ApiResponse({
     status: 200,
     description: 'Current user updated successfully',
@@ -184,6 +190,8 @@ export class UsersController {
           properties: {
             id: { type: 'number', example: 2 },
             username: { type: 'string', example: 'john_doe_new' },
+            email: { type: 'string', example: 'john.new@example.com' },
+            full_name: { type: 'string', example: 'John Doe Updated' },
             role: { type: 'string', example: 'user' },
             created_at: {
               type: 'string',
@@ -202,7 +210,7 @@ export class UsersController {
   })
   @ApiResponse({ status: 400, description: 'Bad Request' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 409, description: 'Username already exists' })
+  @ApiResponse({ status: 409, description: 'Username or email already exists' })
   async updateMe(@Body() updateUserDto: UpdateUserDto, @Req() req) {
     const user = await this.usersService.updateMe(req.user, updateUserDto);
 

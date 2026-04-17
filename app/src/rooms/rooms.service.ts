@@ -61,6 +61,8 @@ export class RoomsService {
     is_active?: string;
     min_capacity?: string;
     max_price?: string;
+    from_date?: string;
+    to_date?: string;
     limit?: string;
     offset?: string;
   }) {
@@ -69,6 +71,8 @@ export class RoomsService {
       is_active,
       min_capacity,
       max_price,
+      from_date,
+      to_date,
       limit,
       offset,
     } = filters;
@@ -103,6 +107,59 @@ export class RoomsService {
     if (max_price) {
       where.price_per_night = {
         lte: Number(max_price),
+      };
+    }
+
+    let bookedRoomIds: number[] = [];
+
+    // If date range is provided, filter out booked rooms
+    if (from_date && to_date) {
+      try {
+        const startDate = new Date(from_date);
+        const endDate = new Date(to_date);
+
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          throw new BadRequestException('Invalid date format. Use ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ');
+        }
+
+        if (startDate >= endDate) {
+          throw new BadRequestException('from_date must be before to_date');
+        }
+
+        // Find all bookings that overlap with the requested date range
+        // Overlapping condition: booking.start_date < to_date AND booking.end_date > from_date
+        const bookedRooms = await this.prisma.bookings.findMany({
+          where: {
+            start_date: {
+              lt: endDate,
+            },
+            end_date: {
+              gt: startDate,
+            },
+            status: {
+              in: ['PENDING', 'APPROVED', 'PAID'],
+            },
+          },
+          select: {
+            room_id: true,
+          },
+          distinct: ['room_id'],
+        });
+
+        bookedRoomIds = bookedRooms.map((b) => b.room_id);
+      } catch (e) {
+        if (e instanceof BadRequestException) {
+          throw e;
+        }
+        this.logger.error('Error filtering bookings', e);
+        throw new BadRequestException('Error processing date range');
+      }
+    }
+
+    // Exclude booked rooms from results
+    if (bookedRoomIds.length > 0) {
+      where.id = {
+        notIn: bookedRoomIds,
       };
     }
 

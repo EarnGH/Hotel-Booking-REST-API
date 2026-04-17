@@ -22,6 +22,9 @@ services:
       retries: 5
       start_period: 20s
     restart: unless-stopped
+    networks:
+      - default
+      - web
 
   mysql:
     image: mysql:8.0
@@ -57,3 +60,7 @@ volumes:
     name: final_project_mysqldata
   redisdata:
     name: final_project_redisdata
+
+networks:
+  web:
+    external: true

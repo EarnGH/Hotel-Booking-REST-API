@@ -23,6 +23,8 @@ export class UsersService {
     return {
       id: user.id,
       username: user.username,
+      email: user.email,
+      full_name: user.full_name,
       role: user.role,
       created_at: user.created_at,
       updated_at: user.updated_at,
@@ -34,7 +36,7 @@ export class UsersService {
   }
 
   async createUser(registerDto: RegisterDto) {
-    const { username, password, role } = registerDto;
+    const { username, email, full_name, password, role } = registerDto;
 
     const existingUser = await this.prisma.users.findUnique({
       where: { username },
@@ -44,12 +46,22 @@ export class UsersService {
       throw new ConflictException('User with this username already exists');
     }
 
+    const existingEmail = await this.prisma.users.findUnique({
+      where: { email },
+    });
+
+    if (existingEmail) {
+      throw new ConflictException('User with this email already exists');
+    }
+
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     const user = await this.prisma.users.create({
       data: {
         username,
+        email,
+        full_name,
         password_hash: hashedPassword,
         role: role || 'user',
       },
@@ -119,6 +131,16 @@ export class UsersService {
 
       if (existingUser && existingUser.id !== current_user.id) {
         throw new ConflictException('User with this username already exists');
+      }
+    }
+
+    if (updateUserDto.email) {
+      const existingEmail = await this.prisma.users.findUnique({
+        where: { email: updateUserDto.email },
+      });
+
+      if (existingEmail && existingEmail.id !== current_user.id) {
+        throw new ConflictException('User with this email already exists');
       }
     }
 
