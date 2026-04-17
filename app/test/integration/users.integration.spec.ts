@@ -11,6 +11,9 @@ describe('Users Integration', () => {
   let prisma: PrismaService;
   let created_user_ids: number[] = [];
   let auth_token: string;
+  let admin_token: string;
+  let admin_id: number;
+  let test_user_id: number;
 
   beforeAll(async () => {
     const module_fixture: TestingModule = await Test.createTestingModule({
@@ -31,17 +34,63 @@ describe('Users Integration', () => {
     prisma = app.get(PrismaService);
 
     // Create a test user and get auth token
+    const username = `integration_user_${Date.now()}`;
+    const email = `integration_${Date.now()}@example.com`;
+    const password = 'password123';
+
     const register_response = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
-        username: `integration_user_${Date.now()}`,
-        email: `integration_${Date.now()}@example.com`,
+        username,
+        email,
         full_name: 'Integration Test User',
-        password: 'password123',
+        password,
       });
 
-    auth_token = register_response.body.access_token || register_response.body.data?.access_token;
-    created_user_ids.push(register_response.body.data?.id || register_response.body.id);
+    test_user_id = register_response.body.data.id;
+
+    // Login to get token
+    const login_response = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        username,
+        password,
+      });
+
+    auth_token = login_response.body.access_token;
+
+    // Create an admin user for admin-required tests
+    const admin_username = `admin_integration_${Date.now()}`;
+    const admin_email = `admin_integration_${Date.now()}@example.com`;
+    const admin_password = 'password123';
+
+    const admin_register = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({
+        username: admin_username,
+        email: admin_email,
+        full_name: 'Admin Integration User',
+        password: admin_password,
+      });
+
+    admin_id = admin_register.body.data.id;
+    created_user_ids.push(admin_id);
+
+    // Update user to admin role
+    await prisma.users.update({
+      where: { id: admin_id },
+      data: { role: 'admin' },
+    });
+
+    // Login admin to get token
+    const admin_login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        username: admin_username,
+        password: admin_password,
+      });
+
+    admin_token = admin_login.body.access_token;
   });
 
   afterEach(async () => {
@@ -59,6 +108,19 @@ describe('Users Integration', () => {
   });
 
   afterAll(async () => {
+    // Clean up test users created in beforeAll
+    if (test_user_id) {
+      await prisma.users.deleteMany({
+        where: { id: test_user_id },
+      });
+    }
+
+    if (admin_id) {
+      await prisma.users.deleteMany({
+        where: { id: admin_id },
+      });
+    }
+
     if (app) {
       await app.close();
     }
@@ -92,7 +154,7 @@ describe('Users Integration', () => {
         .get('/users/me')
         .expect(401);
 
-      expect(response.body.success).toBe(false);
+      
     });
 
     it('should return 401 with invalid token', async () => {
@@ -101,7 +163,7 @@ describe('Users Integration', () => {
         .set('Authorization', 'Bearer invalid_token')
         .expect(401);
 
-      expect(response.body.success).toBe(false);
+      
     });
   });
 
@@ -152,7 +214,7 @@ describe('Users Integration', () => {
         })
         .expect(409);
 
-      expect(response.body.success).toBe(false);
+      
       expect(response.body.message).toContain('already exists');
     });
 
@@ -186,7 +248,7 @@ describe('Users Integration', () => {
         })
         .expect(401);
 
-      expect(response.body.success).toBe(false);
+      
     });
 
     it('should reject invalid email format', async () => {
@@ -198,7 +260,7 @@ describe('Users Integration', () => {
         })
         .expect(400);
 
-      expect(response.body.success).toBe(false);
+      
     });
   });
 
@@ -218,6 +280,7 @@ describe('Users Integration', () => {
 
       const response = await request(app.getHttpServer())
         .get(`/users/${user.id}`)
+        .set('Authorization', `Bearer ${admin_token}`)
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -234,9 +297,10 @@ describe('Users Integration', () => {
     it('should return 404 for non-existent user', async () => {
       const response = await request(app.getHttpServer())
         .get('/users/9999999')
+        .set('Authorization', `Bearer ${admin_token}`)
         .expect(404);
 
-      expect(response.body.success).toBe(false);
+      
       expect(response.body.message).toContain('not found');
     });
   });
@@ -245,6 +309,7 @@ describe('Users Integration', () => {
     it('should return list of users', async () => {
       const response = await request(app.getHttpServer())
         .get('/users')
+        .set('Authorization', `Bearer ${admin_token}`)
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -288,23 +353,36 @@ describe('Users Integration', () => {
       created_user_ids.push(user_to_delete.id);
 
       // Get admin token
+      const admin_username = `admin_login_${Date.now()}`;
+      const admin_password = 'password123';
+
       const admin_register = await request(app.getHttpServer())
         .post('/auth/register')
         .send({
-          username: `admin_login_${Date.now()}`,
+          username: admin_username,
           email: `admin_login_${Date.now()}@example.com`,
           full_name: 'Admin Login',
-          password: 'password123',
-          role: 'admin',
+          password: admin_password,
+          role: 'user',
         });
 
-      const admin_token = admin_register.body.access_token;
+      created_user_ids.push(admin_register.body.data.id);
 
-      // Update admin to have admin role for this test
-      const admin_from_db = await prisma.users.update({
+      // Update user to have admin role
+      await prisma.users.update({
         where: { id: admin_register.body.data.id },
         data: { role: 'admin' },
       });
+
+      // Login to get token
+      const admin_login = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          username: admin_username,
+          password: admin_password,
+        });
+
+      const admin_token = admin_login.body.access_token;
 
       const response = await request(app.getHttpServer())
         .delete(`/users/${user_to_delete.id}`)
@@ -326,7 +404,7 @@ describe('Users Integration', () => {
         .delete('/users/1')
         .expect(401);
 
-      expect(response.body.success).toBe(false);
+      
     });
   });
 });

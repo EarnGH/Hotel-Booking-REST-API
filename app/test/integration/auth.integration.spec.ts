@@ -58,6 +58,8 @@ describe('Auth Integration', () => {
     it('should register a new user', async () => {
       const dto = {
         username: `integration_user_${Date.now()}`,
+        email: `user_${Date.now()}@example.com`,
+        full_name: 'Test User',
         password: 'password123',
         role: 'user',
       };
@@ -95,11 +97,14 @@ describe('Auth Integration', () => {
 
     it('should reject duplicate username', async () => {
       const username = `duplicate_user_${Date.now()}`;
+      const email = `duplicate_${Date.now()}@example.com`;
 
       const first_response = await request(app.getHttpServer())
         .post('/auth/register')
         .send({
           username,
+          email,
+          full_name: 'Test User',
           password: 'password123',
           role: 'user',
         })
@@ -111,6 +116,8 @@ describe('Auth Integration', () => {
         .post('/auth/register')
         .send({
           username,
+          email: `different_${Date.now()}@example.com`,
+          full_name: 'Test User 2',
           password: 'password123',
           role: 'user',
         })
@@ -140,6 +147,8 @@ describe('Auth Integration', () => {
         .post('/auth/register')
         .send({
           username: `shortpass_user_${Date.now()}`,
+          email: `short_${Date.now()}@example.com`,
+          full_name: 'Test User',
           password: '123',
           role: 'user',
         })
@@ -156,12 +165,15 @@ describe('Auth Integration', () => {
   describe('POST /auth/login', () => {
     it('should login successfully and return access token', async () => {
       const username = `login_user_${Date.now()}`;
+      const email = `login_${Date.now()}@example.com`;
       const password = 'password123';
 
       const register_response = await request(app.getHttpServer())
         .post('/auth/register')
         .send({
           username,
+          email,
+          full_name: 'Test User',
           password,
           role: 'user',
         })
@@ -177,8 +189,10 @@ describe('Auth Integration', () => {
         })
         .expect(200);
 
+      expect(response.body.success).toBe(true);
       expect(response.body).toMatchObject({
         access_token: expect.any(String),
+        expiresIn: 3600,
       });
 
       expect(response.body.access_token.length).toBeGreaterThan(0);
@@ -186,12 +200,15 @@ describe('Auth Integration', () => {
 
     it('should reject invalid credentials', async () => {
       const username = `invalid_login_user_${Date.now()}`;
+      const email = `invalid_${Date.now()}@example.com`;
       const password = 'password123';
 
       const register_response = await request(app.getHttpServer())
         .post('/auth/register')
         .send({
           username,
+          email,
+          full_name: 'Test User',
           password,
           role: 'user',
         })
@@ -208,6 +225,99 @@ describe('Auth Integration', () => {
         .expect(401);
 
       expect(response.body.message).toBe('Invalid credentials');
+    });
+  });
+
+  describe('POST /auth/logout', () => {
+    it('should logout successfully', async () => {
+      const username = `logout_user_${Date.now()}`;
+      const email = `logout_${Date.now()}@example.com`;
+      const password = 'password123';
+
+      // Register and login
+      const register_response = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          username,
+          email,
+          full_name: 'Test User',
+          password,
+          role: 'user',
+        })
+        .expect(201);
+
+      created_user_ids.push(register_response.body.data.id);
+
+      const login_response = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          username,
+          password,
+        })
+        .expect(200);
+
+      const access_token = login_response.body.access_token;
+
+      // Logout
+      const logout_response = await request(app.getHttpServer())
+        .post('/auth/logout')
+        .set('Authorization', `Bearer ${access_token}`)
+        .expect(200);
+
+      expect(logout_response.body.success).toBe(true);
+      expect(logout_response.body.message).toBe('Logged out successfully');
+    });
+
+    it('should invalidate token after logout', async () => {
+      const username = `logout_invalidate_user_${Date.now()}`;
+      const email = `logout_inv_${Date.now()}@example.com`;
+      const password = 'password123';
+
+      // Register and login
+      const register_response = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send({
+          username,
+          email,
+          full_name: 'Test User',
+          password,
+          role: 'user',
+        })
+        .expect(201);
+
+      created_user_ids.push(register_response.body.data.id);
+
+      const login_response = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          username,
+          password,
+        })
+        .expect(200);
+
+      const access_token = login_response.body.access_token;
+
+      // Logout
+      await request(app.getHttpServer())
+        .post('/auth/logout')
+        .set('Authorization', `Bearer ${access_token}`)
+        .expect(200);
+
+      // Try to use the token again - should fail
+      const reuse_response = await request(app.getHttpServer())
+        .post('/auth/logout')
+        .set('Authorization', `Bearer ${access_token}`)
+        .expect(401);
+
+      expect(reuse_response.body.message).toBe('Token has been revoked');
+    });
+
+    it('should reject logout without authorization header', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/auth/logout')
+        .expect(401);
+
+      expect(response.body.message).toBe('Authorization header missing');
     });
   });
 });

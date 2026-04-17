@@ -137,6 +137,10 @@ describe('Bookings Integration (Real Auth)', () => {
       username:
         data?.username ??
         `user_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+      email:
+        data?.email ??
+        `email_${Date.now()}_${Math.floor(Math.random() * 10000)}@example.com`,
+      full_name: data?.full_name ?? 'Test User',
       password: data?.password ?? 'password123',
       role: data?.role ?? 'user',
     };

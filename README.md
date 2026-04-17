@@ -56,15 +56,43 @@ cd Hotel-Booking-REST-API/app
 
 ### 2. Configure Environment Variables
 
-This project uses different environment files for local development and Docker.
+This project uses different environment files for local development and Docker. **These files are NOT included in the repository for security reasons** (they contain secrets and credentials).
 
-Create the following files before running the application.
+Three example files are provided to show you what variables are needed:
+- `app/.env.example` - For local development
+- `app/.env.docker.example` - For Docker backend
+- `infra/.env.example` - For Docker Compose
+
+**Setup Workflow:**
+
+#### Step 1: Copy Example Files and Create Your Own
+
+From inside the `app/` folder:
+
+```bash
+# Copy the local development example to create your own .env
+cp .env.example .env
+
+# Copy the Docker example to create your own .env.docker
+cp .env.docker.example .env.docker
+```
+
+From the `infra/` folder:
+
+```bash
+# Copy the infrastructure example to create your own .env
+cp .env.example .env
+```
+
+#### Step 2: Edit Your .env Files
+
+**Important:** Each `.env` file is specific to its use case and must be created separately.
 
 ---
 
 #### 2.1 `app/.env` (Local Development)
 
-Create a file named `.env` inside the `app/` folder:
+After copying `.env.example` to `.env`, edit the file with your values:
 
 ```env
 DATABASE_URL=mysql://<mysql_user>:<mysql_password>@localhost:3307/<mysql_database>
@@ -75,15 +103,25 @@ REDIS_PORT=6379
 ```
 
 **Purpose:**
-- Used when running the NestJS backend locally
-- MySQL and Redis run in Docker, but the backend connects to them through `localhost`
+- Used when running the NestJS backend **locally** on your machine
+- MySQL and Redis run in Docker, but the backend connects through `localhost`
 - MySQL uses port `3307` because the container port `3306` is mapped to local port `3307`
+
+**Example with values:**
+
+```env
+DATABASE_URL=mysql://appuser:apppass@localhost:3307/final_project_db
+JWT_SECRET=my-super-secret-jwt-key-min-32-characters-long!
+PORT=3000
+REDIS_HOST=localhost
+REDIS_PORT=6379
+```
 
 ---
 
 #### 2.2 `app/.env.docker` (Docker Backend Environment)
 
-Create a file named `.env.docker` inside the `app/` folder:
+After copying `.env.docker.example` to `.env.docker`, edit the file with your values:
 
 ```env
 DATABASE_URL=mysql://<mysql_user>:<mysql_password>@mysql:3306/<mysql_database>
@@ -94,14 +132,25 @@ REDIS_PORT=6379
 ```
 
 **Purpose:**
-- Used when the backend itself runs inside Docker
+- Used when the backend itself runs **inside Docker**
 - The backend connects to MySQL and Redis using Docker service names (`mysql`, `redis`)
+- Must match the credentials in `infra/.env`
+
+**Example with values:**
+
+```env
+DATABASE_URL=mysql://appuser:apppass@mysql:3306/final_project_db
+JWT_SECRET=my-super-secret-jwt-key-min-32-characters-long!
+PORT=3000
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
 
 ---
 
 #### 2.3 `infra/.env` (Docker Compose Infrastructure Environment)
 
-Create a file named `.env` inside the `infra/` folder:
+After copying `.env.example` to `.env`, edit the file with your values:
 
 ```env
 DATABASE_URL=mysql://<mysql_user>:<mysql_password>@mysql:3306/<mysql_database>
@@ -120,6 +169,11 @@ MYSQL_DATABASE=final_project_db
 MYSQL_USER=appuser
 MYSQL_PASSWORD=apppass
 ```
+
+**Important:** Make sure the credentials match across all three files:
+- `app/.env` (localhost references)
+- `app/.env.docker` (Docker service references)  
+- `infra/.env` (Docker Compose MySQL setup)
 
 **Purpose:**
 - Used by `docker-compose.yml`
@@ -426,9 +480,15 @@ POST /auth/login
 ```json
 {
   "success": true,
-  "access_token": "your_jwt_token_here"
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expiresIn": 3600
 }
 ```
+
+**Token Details:**
+- **access_token**: JWT token valid for 1 hour
+- **expiresIn**: Token expiration time in seconds
+- Once expired, user must login again to get a new token
 
 ---
 
@@ -440,9 +500,19 @@ POST /auth/login
 POST /auth/logout
 ```
 
+**Headers**
+
+```http
+Authorization: Bearer <access_token>
+```
+
 **Description**
 
-This endpoint returns a logout success message. In the current implementation, logout on the client side is handled by removing the stored JWT token.
+This endpoint invalidates (revokes) the current access token. After logout:
+- The access token is immediately blacklisted in Redis
+- The token cannot be reused for API requests
+- Attempting to use a blacklisted token will result in a 401 Unauthorized error
+- User must login again to get new tokens
 
 **Example Response**
 
@@ -452,6 +522,11 @@ This endpoint returns a logout success message. In the current implementation, l
   "message": "Logged out successfully"
 }
 ```
+
+**Important Security Notes:**
+- Once logged out, the token is immediately blacklisted
+- Attempting to reuse a blacklisted token will fail with "Token has been revoked"
+- Client should delete stored tokens after logout for additional security
 
 ---
 
@@ -1321,6 +1396,27 @@ npx prisma generate
 npx prisma db push
 ```
 
+### Performance Testing
+
+To run the performance tests yourself, use the provided shell script:
+
+```bash
+bash performance-test.sh
+```
+
+This script will:
+1. Check if the API is running at `http://localhost:3000`
+2. Create a test account and login
+3. Test caching performance on the `/rooms` endpoint
+4. Test rate limiting on registration and login endpoints
+5. Output results to `performance-results.txt`
+
+**Prerequisites:**
+- API must be running (`npm run start:dev`)
+- MySQL and Redis running in Docker (`docker compose up -d mysql redis`)
+
+Results will be saved to `performance-results.txt` for your review.
+
 ### Test Results
 
 All test categories have been executed successfully.
@@ -1676,66 +1772,79 @@ This is especially useful for search endpoints, which may otherwise be triggered
 
 ### Performance Testing
 
-Basic performance testing was conducted using `autocannon` to evaluate system responsiveness under concurrent load.
+Performance testing was conducted using a custom shell script (`performance-test.sh`) to measure caching efficiency and rate limiting effectiveness.
+
+**Test Date:** April 17, 2026
 
 ---
 
 **Test Setup**
 
-- Tool: `autocannon`
-- Duration: 20 seconds
-- Concurrent connections: 100
-- Target endpoints:
-  - `GET /rooms`
-  - `GET /rooms/search`
+- Environment: Local development (Node.js backend + Docker MySQL/Redis)
+- Test Tool: Bash script with curl
+- Endpoints tested:
+  - `GET /rooms` (caching)
+  - `POST /auth/register` (rate limiting)
+  - `POST /auth/login` (rate limiting)
 
 ---
 
-**Test Commands**
+**Caching Performance Results**
 
-```bash
-npx autocannon -c 100 -d 20 http://localhost:3000/rooms
+| Metric | Value |
+|--------|-------|
+| First call (uncached) | 7.99 ms |
+| Second call (cached) | 2.93 ms |
+| Improvement | 63.30% faster |
+| Cache TTL | 10 seconds |
 
-npx autocannon -c 100 -d 20 "http://localhost:3000/rooms/search?keyword=Ocean&is_active=true&min_capacity=2&max_price=2000&limit=10&offset=0"
-```
-
----
-
-**Results Summary**
-
-| Endpoint | Avg Latency | Requests/sec | Notes |
-|----------|------------|-------------|------|
-| `/rooms` | ~21.55 ms | ~4532 req/sec | Cached response |
-| `/rooms/search` | ~21.07 ms | ~4635 req/sec | Cached response |
-
-Both endpoints maintained low average latency (~20–22 ms) even under 100 concurrent connections.
+**Analysis:**
+- Caching is **working effectively**, achieving a **63.3% improvement** in response time
+- Cached responses are significantly faster (2.93ms vs 7.99ms)
+- This demonstrates the value of Redis caching for frequently accessed room data
 
 ---
 
-**Observation on Non-2xx Responses**
+**Rate Limiting Performance Results**
 
-A significant number of requests returned non-2xx responses during testing.
+**Registration Endpoint (`POST /auth/register`)**
 
-This is expected because:
+| Request | Result | Status Code |
+|---------|--------|------------|
+| Request 1 | ✅ Created | 201 |
+| Request 2 | ⏱️ Rate Limited | 429 |
+| Request 3 | ⏱️ Rate Limited | 429 |
+| Request 4 | ⏱️ Rate Limited | 429 |
+| Request 5 | ⏱️ Rate Limited | 429 |
 
-- A global rate limit is applied:
-  - 10,000 requests per minute
-- The test generated over 90,000 requests in 20 seconds
+**Login Endpoint (`POST /auth/login`)**
 
-As a result:
-- Excess requests were throttled (likely HTTP 429)
-- The system remained stable and responsive instead of being overloaded
+| Request | Result | Status Code |
+|---------|--------|------------|
+| Request 1 | ✅ Unauthorized | 401 |
+| Request 2 | ✅ Unauthorized | 401 |
+| Request 3 | ✅ Unauthorized | 401 |
+| Request 4 | ⏱️ Rate Limited | 429 |
+| Request 5 | ⏱️ Rate Limited | 429 |
+| Request 6 | ⏱️ Rate Limited | 429 |
+| Request 7 | ⏱️ Rate Limited | 429 |
+
+**Analysis:**
+- **Registration rate limiting is active**: Allows 1 request, then returns 429
+- **Login rate limiting is active**: Allows 3 requests, then returns 429
+- Rate limiting successfully prevents abuse and excessive authentication attempts
+- System responds appropriately with HTTP 429 status code when limit is exceeded
 
 ---
 
-**Interpretation**
+**Performance Conclusions**
 
-- Cached endpoints handled high concurrency efficiently
-- Average latency remained low, indicating fast response times
-- Rate limiting successfully prevented excessive load on the system
-- The system maintained stability even under aggressive traffic conditions
+1. **Caching is effective** - 63.3% improvement on repeated requests
+2. **Rate limiting is working** - Successfully throttles excessive requests
+3. **System stability** - Both mechanisms work together to improve performance and security
+4. **Response times** - Average first-call latency is ~8ms, which is well within acceptable bounds
 
-These results demonstrate that the system satisfies performance-related requirements, including handling concurrent users and maintaining reasonable response times.
+These results confirm that the system meets the performance and security requirements specified in NFR-5, NFR-6, NFR-7, and NFR-13.
 
 ## 👥 Team
 

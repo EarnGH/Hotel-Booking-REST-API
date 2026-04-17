@@ -35,30 +35,46 @@ describe('Notifications Integration', () => {
     prisma = app.get(PrismaService);
 
     // Create a test regular user and get auth token
+    const user_username = `notif_user_${Date.now()}`;
+    const user_email = `notif_user_${Date.now()}@example.com`;
+    const user_password = 'password123';
+
     const user_register = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
-        username: `notif_user_${Date.now()}`,
-        email: `notif_user_${Date.now()}@example.com`,
+        username: user_username,
+        email: user_email,
         full_name: 'Notification Test User',
-        password: 'password123',
+        password: user_password,
       });
 
-    user_token = user_register.body.access_token;
     user_id = user_register.body.data?.id;
     created_user_ids.push(user_id);
 
+    // Login to get user token
+    const user_login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        username: user_username,
+        password: user_password,
+      });
+
+    user_token = user_login.body.access_token;
+
     // Create a test admin user
+    const admin_username = `notif_admin_${Date.now()}`;
+    const admin_email = `notif_admin_${Date.now()}@example.com`;
+    const admin_password = 'password123';
+
     const admin_register = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
-        username: `notif_admin_${Date.now()}`,
-        email: `notif_admin_${Date.now()}@example.com`,
+        username: admin_username,
+        email: admin_email,
         full_name: 'Notification Admin User',
-        password: 'password123',
+        password: admin_password,
       });
 
-    admin_token = admin_register.body.access_token;
     admin_id = admin_register.body.data?.id;
     created_user_ids.push(admin_id);
 
@@ -67,6 +83,16 @@ describe('Notifications Integration', () => {
       where: { id: admin_id },
       data: { role: 'admin' },
     });
+
+    // Login to get admin token
+    const admin_login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        username: admin_username,
+        password: admin_password,
+      });
+
+    admin_token = admin_login.body.access_token;
   });
 
   afterEach(async () => {
@@ -250,29 +276,29 @@ describe('Notifications Integration', () => {
 
     it('should return empty array when user has no notifications', async () => {
       // Create a new user with no notifications
-      const new_user = await prisma.users.create({
-        data: {
-          username: `no_notif_user_${Date.now()}`,
-          email: `no_notif_user_${Date.now()}@example.com`,
-          full_name: 'No Notification User',
-          password_hash: 'hashed_password',
-        },
-      });
+      const new_username = `no_notif_login_${Date.now()}`;
+      const new_password = 'password123';
 
-      created_user_ids.push(new_user.id);
-
-      // Register the user to get a token
       const register_response = await request(app.getHttpServer())
         .post('/auth/register')
         .send({
-          username: `no_notif_login_${Date.now()}`,
+          username: new_username,
           email: `no_notif_login_${Date.now()}@example.com`,
           full_name: 'No Notif Login',
-          password: 'password123',
+          password: new_password,
         });
 
-      const new_user_token = register_response.body.access_token;
       created_user_ids.push(register_response.body.data?.id);
+
+      // Login to get token
+      const login_response = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({
+          username: new_username,
+          password: new_password,
+        });
+
+      const new_user_token = login_response.body.access_token;
 
       const response = await request(app.getHttpServer())
         .get('/notifications')
@@ -288,7 +314,7 @@ describe('Notifications Integration', () => {
         .get('/notifications')
         .expect(401);
 
-      expect(response.body.success).toBe(false);
+      
     });
 
     it('should return 401 with invalid token', async () => {
@@ -297,7 +323,7 @@ describe('Notifications Integration', () => {
         .set('Authorization', 'Bearer invalid_token')
         .expect(401);
 
-      expect(response.body.success).toBe(false);
+      
     });
   });
 

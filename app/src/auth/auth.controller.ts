@@ -74,10 +74,12 @@ export class AuthController {
           type: 'string',
           example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
         },
+        expiresIn: { type: 'number', example: 3600 },
       },
       example: {
         success: true,
         access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        expiresIn: 3600,
       },
     },
   })
@@ -117,10 +119,15 @@ export class AuthController {
     status: 401,
     description: 'Unauthorized',
   })
-  logout(@Req() req: any) {
+  async logout(@Req() req: any) {
+    const accessToken = req.token; // Set by JwtAuthGuard
+
+    await this.authService.logout(accessToken);
+
     return {
       success: true,
       message: 'Logged out successfully',
     };
   }
 }
+

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
+import { TokenBlacklistService } from '../security/token-blacklist.service';
 import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
@@ -11,6 +12,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let usersService: UsersService;
   let jwtService: JwtService;
+  let tokenBlacklistService: TokenBlacklistService;
 
   const mockUser = {
     id: 1,
@@ -31,6 +33,12 @@ describe('AuthService', () => {
   const mockJwtService = {
     sign: jest.fn(),
     verify: jest.fn(),
+    verifyAsync: jest.fn(),
+  };
+
+  const mockTokenBlacklistService = {
+    addToBlacklist: jest.fn(),
+    isBlacklisted: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -39,12 +47,14 @@ describe('AuthService', () => {
         AuthService,
         { provide: UsersService, useValue: mockUsersService },
         { provide: JwtService, useValue: mockJwtService },
+        { provide: TokenBlacklistService, useValue: mockTokenBlacklistService },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
     usersService = module.get<UsersService>(UsersService);
     jwtService = module.get<JwtService>(JwtService);
+    tokenBlacklistService = module.get<TokenBlacklistService>(TokenBlacklistService);
 
     jest.clearAllMocks();
   });
@@ -136,6 +146,7 @@ describe('AuthService', () => {
       const result = await service.login(loginDto);
 
       expect(result.access_token).toBe('test_jwt_token');
+      expect(result.expiresIn).toBe(3600);
       expect(jwtService.sign).toHaveBeenCalledWith(
         {
           id: mockUser.id,
@@ -191,6 +202,21 @@ describe('AuthService', () => {
           role: 'admin',
         }),
         { expiresIn: '1h' },
+      );
+    });
+  });
+
+  describe('logout', () => {
+    it('should blacklist access token on logout', async () => {
+      const accessToken = 'access_token_to_revoke';
+
+      mockTokenBlacklistService.addToBlacklist.mockResolvedValueOnce(undefined);
+
+      await service.logout(accessToken);
+
+      expect(tokenBlacklistService.addToBlacklist).toHaveBeenCalledWith(
+        accessToken,
+        3600,
       );
     });
   });
