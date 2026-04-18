@@ -101,7 +101,6 @@ describe('Booking Flow (e2e)', () => {
         `email_${Date.now()}_${Math.floor(Math.random() * 10000)}@example.com`,
       full_name: data?.full_name ?? 'Test User',
       password: data?.password ?? 'password123',
-      role: data?.role ?? 'user',
     };
 
     const response = await request(app.getHttpServer())
@@ -122,6 +121,15 @@ describe('Booking Flow (e2e)', () => {
 
     if (!created_user) {
       throw new Error('Failed to find registered user in database');
+    }
+
+    // Promote to admin via database if requested
+    if (data?.role === 'admin') {
+      await prisma.users.update({
+        where: { id: created_user.id },
+        data: { role: 'admin' },
+      });
+      created_user.role = 'admin';
     }
 
     created_user_ids.push(created_user.id);

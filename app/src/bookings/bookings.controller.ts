@@ -130,7 +130,7 @@ export class BookingsController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.USER)
-  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  @Throttle({ default: { limit: 100, ttl: 30 * 1000 } })
   @ApiOperation({ summary: 'Retrieve bookings based on user role' })
   @ApiResponse({
     status: 200,
@@ -285,7 +285,7 @@ export class BookingsController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.USER)
-  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  @Throttle({ default: { limit: 100, ttl: 1000 * 30 } })
   @ApiOperation({ summary: 'Search bookings based on user role' })
   @ApiQuery({
     name: 'room_id',

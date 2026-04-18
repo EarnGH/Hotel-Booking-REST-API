@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import * as bcrypt from "bcrypt";
 
 const db_url = new URL(process.env.DATABASE_URL!);
 
@@ -65,6 +66,28 @@ async function main() {
       update: room,
       create: room,
     });
+  }
+
+  // Seed admin account
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    console.warn(
+      "WARNING: ADMIN_PASSWORD environment variable is not set. Skipping admin account creation."
+    );
+  } else {
+    const hashedPassword = await bcrypt.hash(adminPassword, 12);
+    await prisma.users.upsert({
+      where: { username: "admin" },
+      update: {},
+      create: {
+        username: "admin",
+        email: process.env.ADMIN_EMAIL || "admin@hotel-booking.com",
+        full_name: "System Administrator",
+        password_hash: hashedPassword,
+        role: "admin",
+      },
+    });
+    console.log("Admin account created/verified");
   }
 
   console.log("Seed data inserted/updated");

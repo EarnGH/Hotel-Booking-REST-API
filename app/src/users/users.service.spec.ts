@@ -65,7 +65,6 @@ describe('UsersService', () => {
         email: 'newuser@example.com',
         full_name: 'New User',
         password: 'password123',
-        role: Role.USER,
       };
 
       mockPrismaService.users.findUnique.mockResolvedValueOnce(null);

@@ -1,31 +1,26 @@
-Performance Test Results - Fri Apr 17 19:44:08 SEAST 2026
+Performance Test Results - Sat, Apr 18, 2026  3:33:33 PM
 =======================================
 
 
 3. CACHING PERFORMANCE TEST
 ---
-First call (uncached): 7.99ms
-Second call (cached): 2.93ms
-Improvement: 63.30%
+First call (uncached): 10.66ms
+Second call (cached): 23.93ms
+Improvement: -124.57%
 ⚠️  Cache may not be optimized
 
 4. RATE LIMITING TEST
 ---
-Testing registration rate limit (3 per 5 minutes)
+Testing registration rate limit (100 per 30 seconds)
 
-Request 1: ✅ Created (201)
-Request 2: ⏱️  Rate Limited (429)
-Request 3: ⏱️  Rate Limited (429)
-Request 4: ⏱️  Rate Limited (429)
-Request 5: ⏱️  Rate Limited (429)
+Registration results:
+  ✅ Created (201): 99 requests
+  ⏱️  Rate Limited (429): 6 requests
 
-Testing login rate limit (5 per 1 minute)
 
-Request 1: ✅ Unauthorized (401)
-Request 2: ✅ Unauthorized (401)
-Request 3: ✅ Unauthorized (401)
-Request 4: ⏱️  Rate Limited (429)
-Request 5: ⏱️  Rate Limited (429)
-Request 6: ⏱️  Rate Limited (429)
-Request 7: ⏱️  Rate Limited (429)
+Testing login rate limit (100 per 30 seconds)
+
+Login results:
+  ✅ Unauthorized (401): 100 requests
+  ⏱️  Rate Limited (429): 5 requests
 

@@ -363,7 +363,6 @@ describe('Users Integration', () => {
           email: `admin_login_${Date.now()}@example.com`,
           full_name: 'Admin Login',
           password: admin_password,
-          role: 'user',
         });
 
       created_user_ids.push(admin_register.body.data.id);

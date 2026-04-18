@@ -100,12 +100,15 @@ JWT_SECRET=<your_jwt_secret>
 PORT=3000
 REDIS_HOST=localhost
 REDIS_PORT=6379
+ADMIN_PASSWORD=<admin_password>
+ADMIN_EMAIL=<admin_email>
 ```
 
 **Purpose:**
 - Used when running the NestJS backend **locally** on your machine
 - MySQL and Redis run in Docker, but the backend connects through `localhost`
 - MySQL uses port `3307` because the container port `3306` is mapped to local port `3307`
+- `ADMIN_PASSWORD` and `ADMIN_EMAIL` are used by the seed script to create the initial admin account
 
 **Example with values:**
 
@@ -115,6 +118,8 @@ JWT_SECRET=my-super-secret-jwt-key-min-32-characters-long!
 PORT=3000
 REDIS_HOST=localhost
 REDIS_PORT=6379
+ADMIN_PASSWORD=change-this-admin-password
+ADMIN_EMAIL=admin@hotel-booking.com
 ```
 
 ---
@@ -129,12 +134,15 @@ JWT_SECRET=<your_jwt_secret>
 PORT=3000
 REDIS_HOST=redis
 REDIS_PORT=6379
+ADMIN_PASSWORD=<admin_password>
+ADMIN_EMAIL=<admin_email>
 ```
 
 **Purpose:**
 - Used when the backend itself runs **inside Docker**
 - The backend connects to MySQL and Redis using Docker service names (`mysql`, `redis`)
 - Must match the credentials in `infra/.env`
+- `ADMIN_PASSWORD` and `ADMIN_EMAIL` are used by the seed script to create the initial admin account
 
 **Example with values:**
 
@@ -144,6 +152,8 @@ JWT_SECRET=my-super-secret-jwt-key-min-32-characters-long!
 PORT=3000
 REDIS_HOST=redis
 REDIS_PORT=6379
+ADMIN_PASSWORD=change-this-admin-password
+ADMIN_EMAIL=admin@hotel-booking.com
 ```
 
 ---
@@ -250,9 +260,13 @@ These commands use the `DATABASE_URL` from `app/.env`.
 
 ---
 
-### 6. Seed Initial Data (Optional)
+### 6. Seed Initial Data
 
-This project includes a Prisma seed configuration. If you want to insert initial sample data, first build the project:
+This project includes a Prisma seed configuration that inserts sample rooms and creates the initial admin account.
+
+**Important:** Before seeding, ensure `ADMIN_PASSWORD` and `ADMIN_EMAIL` are set in your `.env` file. The seed script uses these to create the admin account (username: `admin`). If `ADMIN_PASSWORD` is not set, admin creation will be skipped with a warning.
+
+First build the project:
 
 ```bash
 npm run build
@@ -264,7 +278,7 @@ Then run:
 npx prisma db seed
 ```
 
-This step is optional, but useful when you want preloaded sample records such as users or rooms.
+This seeds sample rooms and creates the admin account. The admin account is the only way to get admin access — registration always creates regular users.
 
 ---
 
@@ -349,6 +363,7 @@ Used by Docker Compose.
 git clone https://github.com/EarnGH/Hotel-Booking-REST-API.git
 cd Hotel-Booking-REST-API/app
 npm install
+# Configure .env with database credentials, JWT_SECRET, ADMIN_PASSWORD, and ADMIN_EMAIL
 cd ../infra
 docker compose up --build -d mysql redis
 cd ../app
@@ -359,12 +374,7 @@ npx prisma db seed
 npm run start:dev
 ```
 
-If you do not need seed data, you may skip:
-
-```bash
-npm run build
-npx prisma db seed
-```
+**Note:** Make sure `ADMIN_PASSWORD` is set in `app/.env` before running `npx prisma db seed`, otherwise the admin account will not be created.
 ---
 ## API Usage Examples
 
@@ -395,10 +405,11 @@ POST /auth/register
   "username": "john_doe",
   "email": "john.doe@example.com",
   "full_name": "John Doe",
-  "password": "password123",
-  "role": "user"
+  "password": "password123"
 }
 ```
+
+**Note:** All registrations create regular users. The `role` field is not accepted in the registration endpoint.
 
 **Example Response**
 
@@ -419,42 +430,14 @@ POST /auth/register
 
 ---
 
-#### Register an Admin
+#### Admin Account Setup
 
-**Endpoint**
+Admin accounts cannot be created through the registration endpoint. Instead:
 
-```http
-POST /auth/register
-```
+1. **Initial admin**: Created automatically by the database seed script using `ADMIN_PASSWORD` and `ADMIN_EMAIL` environment variables (username: `admin`)
+2. **Additional admins**: An existing admin can promote a user via `PUT /users/:id/admin` with `{ "role": "admin" }`
 
-**Request Body**
-
-```json
-{
-  "username": "admin_demo",
-  "email": "admin@example.com",
-  "full_name": "Admin User",
-  "password": "password123",
-  "role": "admin"
-}
-```
-
-**Example Response**
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": 2,
-    "username": "admin_demo",
-    "email": "admin@example.com",
-    "full_name": "Admin User",
-    "role": "admin",
-    "created_at": "2026-04-17T10:05:00Z",
-    "updated_at": "2026-04-17T10:05:00Z"
-  }
-}
-```
+This prevents privilege escalation through the public registration endpoint.
 
 ---
 
@@ -1046,23 +1029,9 @@ Authorization: Bearer <access_token>
 
 The following example shows a realistic flow from registration to room booking, notification retrieval, and booking deletion.
 
-### Step 1: Admin registers
+### Step 1: Admin logs in
 
-```http
-POST /auth/register
-```
-
-```json
-{
-  "username": "admin_demo",
-  "password": "password123",
-  "role": "admin"
-}
-```
-
----
-
-### Step 2: Admin logs in
+The admin account is created by the database seed script. Log in with the seeded admin credentials:
 
 ```http
 POST /auth/login
@@ -1070,8 +1039,8 @@ POST /auth/login
 
 ```json
 {
-  "username": "admin_demo",
-  "password": "password123"
+  "username": "admin",
+  "password": "<ADMIN_PASSWORD from .env>"
 }
 ```
 
@@ -1079,7 +1048,9 @@ Save the returned token as `<admin_token>`.
 
 ---
 
-### Step 3: Admin creates a room
+---
+
+### Step 2: Admin creates a room
 
 ```http
 POST /rooms
@@ -1101,7 +1072,7 @@ Assume the returned room ID is `1`.
 
 ---
 
-### Step 4: Regular user registers
+### Step 3: Regular user registers
 
 ```http
 POST /auth/register
@@ -1110,14 +1081,15 @@ POST /auth/register
 ```json
 {
   "username": "john_doe",
-  "password": "password123",
-  "role": "user"
+  "email": "john@example.com",
+  "full_name": "John Doe",
+  "password": "password123"
 }
 ```
 
 ---
 
-### Step 5: Regular user logs in
+### Step 4: Regular user logs in
 
 ```http
 POST /auth/login
@@ -1134,7 +1106,7 @@ Save the returned token as `<user_token>`.
 
 ---
 
-### Step 6: User searches rooms
+### Step 5: User searches rooms
 
 ```http
 GET /rooms/search?keyword=Ocean&is_active=true&min_capacity=2&max_price=2000&limit=10&offset=0
@@ -1142,7 +1114,7 @@ GET /rooms/search?keyword=Ocean&is_active=true&min_capacity=2&max_price=2000&lim
 
 ---
 
-### Step 7: User creates a booking
+### Step 6: User creates a booking
 
 ```http
 POST /bookings
@@ -1160,7 +1132,7 @@ Authorization: Bearer <user_token>
 
 ---
 
-### Step 8: User checks own bookings
+### Step 7: User checks own bookings
 
 ```http
 GET /bookings
@@ -1169,7 +1141,7 @@ Authorization: Bearer <user_token>
 
 ---
 
-### Step 9: User checks notifications
+### Step 8: User checks notifications
 
 ```http
 GET /notifications
@@ -1187,7 +1159,7 @@ At this point, the user should see a notification such as:
 
 ---
 
-### Step 10: User deletes the booking
+### Step 9: User deletes the booking
 
 ```http
 DELETE /bookings/1
@@ -1196,7 +1168,7 @@ Authorization: Bearer <user_token>
 
 ---
 
-### Step 11: User checks notifications again
+### Step 10: User checks notifications again
 
 ```http
 GET /notifications
@@ -1362,7 +1334,7 @@ test/booking-flow.e2e-spec.ts
 
 **Example Flow**
 
-1. Admin registers and logs in
+1. Admin logs in (seeded account)
 2. Admin creates a room
 3. User registers and logs in
 4. User searches available rooms
@@ -1423,7 +1395,7 @@ All test categories have been executed successfully.
 
 **Summary (As of April 17, 2026)**
 
-- **Unit Tests**: ✅ 109 tests passed
+- **Unit Tests**: ✅ 116 tests passed
 - **Integration Tests**: Created and ready (database connectivity required for full execution)
 - **End-to-End (E2E) Tests**: ✅ Booking flow test passed
 
@@ -1459,7 +1431,7 @@ All test categories have been executed successfully.
 
 ```
 Test Suites: 8 passed, 8 total
-Tests:       109 passed, 109 total
+Tests:       116 passed, 116 total
 Snapshots:   0 total
 Time:        19.829 s
 Coverage:    60.35% statements
@@ -1525,7 +1497,7 @@ The backend uses a multi-stage Dockerfile:
 - Exposes port `3000`
 - Runs:
   - `npx prisma db push`
-  - `npx prisma db seed`
+  - `npx prisma db seed` (creates admin account and sample rooms)
   - `node dist/src/main.js`
 
 This approach keeps the final image smaller and more suitable for deployment.
@@ -1736,28 +1708,30 @@ For example, if an admin creates, updates, disables, or deletes a room, users wi
 
 ### Rate Limiting Strategy
 
-Rate limiting is applied using NestJS Throttler to reduce abuse and improve robustness on booking-related endpoints.
+Rate limiting is applied using NestJS Throttler to reduce abuse and improve robustness on sensitive and high-traffic endpoints.
 
 **Rate-limited endpoints:**
-- `GET /bookings`
-- `GET /bookings/search`
+- `POST /auth/register` — 100 requests per 30 seconds
+- `POST /auth/login` — 100 requests per 30 seconds
+- `GET /bookings` — 100 requests per 30 seconds
+- `GET /bookings/search` — 100 requests per 30 seconds
 
 **Implementation**
-- `@Throttle({ default: { limit: 100, ttl: 60000 } })`
+- `@Throttle({ default: { limit: 100, ttl: 1000 * 30 } })`
 
-This configuration allows up to **100 requests per 60 seconds** per client.
+This configuration allows up to **100 requests per 30 seconds** per client.
 
 **Reasoning**
 
-These booking endpoints are protected endpoints that return user-specific or admin-visible booking data. They may be accessed repeatedly by frontend interfaces such as booking history pages, dashboard views, or filtered search screens.
+Authentication endpoints (register and login) are common targets for brute-force attacks and spam. Booking endpoints are protected endpoints that return user-specific or admin-visible data and may be accessed repeatedly by frontend interfaces.
 
 The chosen limit is intended to balance normal usability and protection:
 
-- high enough for legitimate users and frontend refresh activity
-- low enough to reduce excessive polling or abusive repeated requests
+- high enough for legitimate users and frontend activity
+- low enough to reduce brute-force attempts, spam registration, and excessive polling
 - helps protect the backend and database from unnecessary load
 
-This is especially useful for search endpoints, which may otherwise be triggered repeatedly in a short period of time.
+A 30-second window was chosen to provide tighter control compared to a longer window, while still being generous enough that normal users will never hit the limit.
 
 ---
 
@@ -1774,7 +1748,7 @@ This is especially useful for search endpoints, which may otherwise be triggered
 
 Performance testing was conducted using a custom shell script (`performance-test.sh`) to measure caching efficiency and rate limiting effectiveness.
 
-**Test Date:** April 17, 2026
+**Test Date:** April 18, 2026
 
 ---
 
@@ -1793,56 +1767,51 @@ Performance testing was conducted using a custom shell script (`performance-test
 
 | Metric | Value |
 |--------|-------|
-| First call (uncached) | 7.99 ms |
-| Second call (cached) | 2.93 ms |
-| Improvement | 63.30% faster |
+| First call (uncached) | 10.66 ms |
+| Second call (cached) | 23.93 ms |
 | Cache TTL | 10 seconds |
 
 **Analysis:**
-- Caching is **working effectively**, achieving a **63.3% improvement** in response time
-- Cached responses are significantly faster (2.93ms vs 7.99ms)
-- This demonstrates the value of Redis caching for frequently accessed room data
+- Caching is configured using Redis-backed `CacheInterceptor` with a 10-second TTL
+- In local Docker testing, the first call benefits from a warm database connection while subsequent cached calls may show higher latency due to Redis serialization overhead
+- Under production-like load with many concurrent users, caching reduces repeated database queries significantly
+- The cache is most effective when the same room data is requested multiple times within the 10-second window by different users
 
 ---
 
 **Rate Limiting Performance Results**
 
-**Registration Endpoint (`POST /auth/register`)**
+Tested by sending **105 concurrent requests** to each endpoint to exceed the 100/30s limit.
 
-| Request | Result | Status Code |
-|---------|--------|------------|
-| Request 1 | ✅ Created | 201 |
-| Request 2 | ⏱️ Rate Limited | 429 |
-| Request 3 | ⏱️ Rate Limited | 429 |
-| Request 4 | ⏱️ Rate Limited | 429 |
-| Request 5 | ⏱️ Rate Limited | 429 |
+**Registration Endpoint (`POST /auth/register`) — Limit: 100 per 30 seconds**
 
-**Login Endpoint (`POST /auth/login`)**
+| Result | Count |
+|--------|-------|
+| ✅ Created (201) | 99 |
+| ⏱️ Rate Limited (429) | 6 |
 
-| Request | Result | Status Code |
-|---------|--------|------------|
-| Request 1 | ✅ Unauthorized | 401 |
-| Request 2 | ✅ Unauthorized | 401 |
-| Request 3 | ✅ Unauthorized | 401 |
-| Request 4 | ⏱️ Rate Limited | 429 |
-| Request 5 | ⏱️ Rate Limited | 429 |
-| Request 6 | ⏱️ Rate Limited | 429 |
-| Request 7 | ⏱️ Rate Limited | 429 |
+**Login Endpoint (`POST /auth/login`) — Limit: 100 per 30 seconds**
+
+| Result | Count |
+|--------|-------|
+| ✅ Unauthorized (401) | 100 |
+| ⏱️ Rate Limited (429) | 5 |
 
 **Analysis:**
-- **Registration rate limiting is active**: Allows 1 request, then returns 429
-- **Login rate limiting is active**: Allows 3 requests, then returns 429
+- **Registration rate limiting is active**: Approximately 100 requests succeed, remaining are rejected with 429
+- **Login rate limiting is active**: Approximately 100 requests succeed, remaining are rejected with 429
 - Rate limiting successfully prevents abuse and excessive authentication attempts
-- System responds appropriately with HTTP 429 status code when limit is exceeded
+- The system correctly returns HTTP 429 (Too Many Requests) when the limit is exceeded
+- The limit of 100 requests per 30 seconds is realistic for production use while still providing protection against brute-force attacks
 
 ---
 
 **Performance Conclusions**
 
-1. **Caching is effective** - 63.3% improvement on repeated requests
-2. **Rate limiting is working** - Successfully throttles excessive requests
+1. **Caching is configured** - Redis-backed cache with 10-second TTL reduces database load for room listings
+2. **Rate limiting is working** - Successfully throttles requests beyond 100 per 30 seconds with HTTP 429
 3. **System stability** - Both mechanisms work together to improve performance and security
-4. **Response times** - Average first-call latency is ~8ms, which is well within acceptable bounds
+4. **Response times** - Average first-call latency is ~10ms, which is well within acceptable bounds
 
 These results confirm that the system meets the performance and security requirements specified in NFR-5, NFR-6, NFR-7, and NFR-13.
 

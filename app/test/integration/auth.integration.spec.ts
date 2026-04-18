@@ -61,7 +61,6 @@ describe('Auth Integration', () => {
         email: `user_${Date.now()}@example.com`,
         full_name: 'Test User',
         password: 'password123',
-        role: 'user',
       };
 
       const response = await request(app.getHttpServer())
@@ -106,7 +105,6 @@ describe('Auth Integration', () => {
           email,
           full_name: 'Test User',
           password: 'password123',
-          role: 'user',
         })
         .expect(201);
 
@@ -119,7 +117,6 @@ describe('Auth Integration', () => {
           email: `different_${Date.now()}@example.com`,
           full_name: 'Test User 2',
           password: 'password123',
-          role: 'user',
         })
         .expect(409);
 
@@ -150,7 +147,6 @@ describe('Auth Integration', () => {
           email: `short_${Date.now()}@example.com`,
           full_name: 'Test User',
           password: '123',
-          role: 'user',
         })
         .expect(400);
 
@@ -175,7 +171,6 @@ describe('Auth Integration', () => {
           email,
           full_name: 'Test User',
           password,
-          role: 'user',
         })
         .expect(201);
 
@@ -210,7 +205,7 @@ describe('Auth Integration', () => {
           email,
           full_name: 'Test User',
           password,
-          role: 'user',
+
         })
         .expect(201);
 
@@ -242,7 +237,7 @@ describe('Auth Integration', () => {
           email,
           full_name: 'Test User',
           password,
-          role: 'user',
+
         })
         .expect(201);
 
@@ -281,7 +276,6 @@ describe('Auth Integration', () => {
           email,
           full_name: 'Test User',
           password,
-          role: 'user',
         })
         .expect(201);
 

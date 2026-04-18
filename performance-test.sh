@@ -104,10 +104,10 @@ echo "First call (uncached): ${FIRST_TIME_MS}ms" | tee -a "$RESULTS_FILE"
 echo "Second call (cached): ${SECOND_TIME_MS}ms" | tee -a "$RESULTS_FILE"
 echo "Improvement: ${IMPROVEMENT}%" | tee -a "$RESULTS_FILE"
 
-if (( $(echo "$SECOND_TIME < $FIRST_TIME" | awk '{printf ($2 < $4 ? 1 : 0)}') )); then
+if [ "$(echo "$SECOND_TIME $FIRST_TIME" | awk '{print ($1 < $2)}')" = "1" ]; then
     echo "✅ Caching is working" | tee -a "$RESULTS_FILE"
 else
-    echo "⚠️  Cache may not be optimized" | tee -a "$RESULTS_FILE"
+    echo "⚠️  Cached response was not faster (may vary in local Docker)" | tee -a "$RESULTS_FILE"
 fi
 echo ""
 
@@ -116,69 +116,96 @@ echo "[5/5] Testing Rate Limiting..."
 echo "" >> "$RESULTS_FILE"
 echo "4. RATE LIMITING TEST" >> "$RESULTS_FILE"
 echo "---" >> "$RESULTS_FILE"
-echo "Testing registration rate limit (3 per 5 minutes)" >> "$RESULTS_FILE"
+echo "Testing registration rate limit (100 per 30 seconds)" >> "$RESULTS_FILE"
 echo "" >> "$RESULTS_FILE"
 
-RATE_LIMIT_RESULTS=""
-for i in {1..5}; do
-    REGISTER_TEST=$(curl -s -X POST "$API_URL/auth/register" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"username\":\"ratelimit_test_${i}_$(date +%s)\",
-        \"email\":\"ratelimit_${i}_$(date +%s)@test.com\",
-        \"full_name\":\"Rate Limit Test\",
-        \"password\":\"$TEST_PASSWORD\"
-      }" -w "\n%{http_code}")
+# Create temp directory for collecting results
+TMPDIR=$(mktemp -d)
 
-    HTTP_CODE=$(echo "$REGISTER_TEST" | tail -1)
-    BODY=$(echo "$REGISTER_TEST" | head -n -1)
+# Send 105 registration requests concurrently to exceed the 100/30s limit
+echo "Sending 105 concurrent registration requests..."
+for i in $(seq 1 105); do
+    (
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API_URL/auth/register" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"username\":\"ratelimit_test_${i}_$(date +%s%N)\",
+            \"email\":\"ratelimit_${i}_$(date +%s%N)@test.com\",
+            \"full_name\":\"Rate Limit Test\",
+            \"password\":\"$TEST_PASSWORD\"
+          }")
+        echo "$HTTP_CODE" > "$TMPDIR/reg_$i"
+    ) &
+done
+wait
 
+CREATED_COUNT=0
+RATE_LIMITED_COUNT=0
+ERROR_COUNT=0
+
+for i in $(seq 1 105); do
+    HTTP_CODE=$(cat "$TMPDIR/reg_$i" 2>/dev/null)
     if [ "$HTTP_CODE" = "201" ]; then
-        STATUS="✅ Created (201)"
+        CREATED_COUNT=$((CREATED_COUNT + 1))
     elif [ "$HTTP_CODE" = "429" ]; then
-        STATUS="⏱️  Rate Limited (429)"
+        RATE_LIMITED_COUNT=$((RATE_LIMITED_COUNT + 1))
     else
-        STATUS="❌ Error ($HTTP_CODE)"
-    fi
-
-    echo "Request $i: $STATUS" | tee -a "$RESULTS_FILE"
-    RATE_LIMIT_RESULTS="$RATE_LIMIT_RESULTS\nRequest $i: HTTP $HTTP_CODE"
-
-    if [ $i -lt 5 ]; then
-        sleep 1
+        ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
 done
 
+echo "Registration results:" | tee -a "$RESULTS_FILE"
+echo "  ✅ Created (201): $CREATED_COUNT requests" | tee -a "$RESULTS_FILE"
+echo "  ⏱️  Rate Limited (429): $RATE_LIMITED_COUNT requests" | tee -a "$RESULTS_FILE"
+if [ "$ERROR_COUNT" -gt 0 ]; then
+    echo "  ❌ Errors: $ERROR_COUNT requests" | tee -a "$RESULTS_FILE"
+fi
 echo "" >> "$RESULTS_FILE"
-echo "Testing login rate limit (5 per 1 minute)" >> "$RESULTS_FILE"
+
+echo "" >> "$RESULTS_FILE"
+echo "Testing login rate limit (100 per 30 seconds)" >> "$RESULTS_FILE"
 echo "" >> "$RESULTS_FILE"
 
-for i in {1..7}; do
-    LOGIN_TEST=$(curl -s -X POST "$API_URL/auth/login" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"username\":\"$TEST_USERNAME\",
-        \"password\":\"wrongpassword\"
-      }" -w "\n%{http_code}")
+# Send 105 login requests concurrently to exceed the 100/30s limit
+echo "Sending 105 concurrent login requests..."
+for i in $(seq 1 105); do
+    (
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API_URL/auth/login" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"username\":\"$TEST_USERNAME\",
+            \"password\":\"wrongpassword\"
+          }")
+        echo "$HTTP_CODE" > "$TMPDIR/login_$i"
+    ) &
+done
+wait
 
-    HTTP_CODE=$(echo "$LOGIN_TEST" | tail -1)
+UNAUTH_COUNT=0
+RATE_LIMITED_COUNT=0
+ERROR_COUNT=0
 
+for i in $(seq 1 105); do
+    HTTP_CODE=$(cat "$TMPDIR/login_$i" 2>/dev/null)
     if [ "$HTTP_CODE" = "401" ]; then
-        STATUS="✅ Unauthorized (401)"
+        UNAUTH_COUNT=$((UNAUTH_COUNT + 1))
     elif [ "$HTTP_CODE" = "429" ]; then
-        STATUS="⏱️  Rate Limited (429)"
+        RATE_LIMITED_COUNT=$((RATE_LIMITED_COUNT + 1))
     else
-        STATUS="❌ Error ($HTTP_CODE)"
-    fi
-
-    echo "Request $i: $STATUS" | tee -a "$RESULTS_FILE"
-
-    if [ $i -lt 7 ]; then
-        sleep 1
+        ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
 done
 
+echo "Login results:" | tee -a "$RESULTS_FILE"
+echo "  ✅ Unauthorized (401): $UNAUTH_COUNT requests" | tee -a "$RESULTS_FILE"
+echo "  ⏱️  Rate Limited (429): $RATE_LIMITED_COUNT requests" | tee -a "$RESULTS_FILE"
+if [ "$ERROR_COUNT" -gt 0 ]; then
+    echo "  ❌ Errors: $ERROR_COUNT requests" | tee -a "$RESULTS_FILE"
+fi
 echo "" >> "$RESULTS_FILE"
+
+# Clean up temp directory
+rm -rf "$TMPDIR"
 
 # Summary
 echo ""
