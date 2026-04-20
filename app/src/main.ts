@@ -6,21 +6,24 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-  logger: new ConsoleLogger({
+    logger: new ConsoleLogger({
       prefix: 'nest-prisma-lab',
-      }),
+    }),
   });
+
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalPipes(new ValidationPipe());
 
-  const config = new DocumentBuilder()
+  const swagger_server_path = process.env.SWAGGER_SERVER_PATH;
+
+  const document_builder = new DocumentBuilder()
     .setTitle('Hotel Booking System API')
     .setDescription(
-    [
-      'API for managing rooms within Hotel Booking System.',
-      '',
-    ].join('\n'),
-  )
+      [
+        'API for managing rooms within Hotel Booking System.',
+        '',
+      ].join('\n'),
+    )
     .setVersion('1.0.0')
     .addTag('rooms')
     .addTag('bookings')
@@ -33,9 +36,14 @@ async function bootstrap() {
         description: 'Use: Authorization: Bearer <access_token>',
         in: 'header',
       },
-      'access-token', // Security name used in decorators
-    )
-    .build();
+      'access-token',
+    );
+
+  if (swagger_server_path) {
+    document_builder.addServer(swagger_server_path);
+  }
+
+  const config = document_builder.build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, document);
 
