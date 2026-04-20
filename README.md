@@ -278,7 +278,17 @@ Then run:
 npx prisma db seed
 ```
 
-This seeds sample rooms and creates the admin account. The admin account is the only way to get admin access — registration always creates regular users.
+This seeds sample rooms and creates the admin account.
+
+#### Admin Account Management
+
+This project uses a controlled approach for admin access:
+
+1. **The first admin is created by the seed script.** The seed reads `ADMIN_PASSWORD` and `ADMIN_EMAIL` from the environment file and creates a single admin account with the username `admin`. If `ADMIN_PASSWORD` is not set, admin creation is skipped.
+2. **Registration always creates regular users.** The `POST /auth/register` endpoint does not accept a `role` field — every new account is assigned the `user` role automatically.
+3. **Only an existing admin can promote other users.** To create additional admins, first register a normal user account, then have an admin call `PUT /users/:id/admin` with `{ "role": "admin" }` to change that user's role.
+
+This design prevents privilege escalation through the public registration endpoint and ensures that admin access is always granted intentionally by an existing administrator.
 
 ---
 
@@ -434,10 +444,10 @@ POST /auth/register
 
 Admin accounts cannot be created through the registration endpoint. Instead:
 
-1. **Initial admin**: Created automatically by the database seed script using `ADMIN_PASSWORD` and `ADMIN_EMAIL` environment variables (username: `admin`)
-2. **Additional admins**: An existing admin can promote a user via `PUT /users/:id/admin` with `{ "role": "admin" }`
+1. **Initial admin**: Created automatically by the database seed script. You must set `ADMIN_PASSWORD` and `ADMIN_EMAIL` in your `.env` (or `.env.docker` for Docker) before running `npx prisma db seed`. The seed creates one admin with the username `admin`.
+2. **Additional admins**: Register a new account as a regular user, then have an existing admin promote that user via `PUT /users/:id/admin` with `{ "role": "admin" }`.
 
-This prevents privilege escalation through the public registration endpoint.
+See [Step 6: Seed Initial Data](#6-seed-initial-data) for more details on admin account management.
 
 ---
 
@@ -1596,8 +1606,20 @@ The system is deployed on a server using Docker and Nginx.
 From the `infra/` folder on the server:
 
 ```bash
-docker compose up --build -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
+
+Both Compose files must be specified because the production override (`docker-compose.prod.yml`) configures the container to join the existing Nginx reverse-proxy network (`web`). Using only `docker compose up` would create an isolated default network, and Nginx would not be able to reach the API container.
+
+**Additional environment variable for deployment:**
+
+When deploying behind Nginx, add the following line to `app/.env.docker`:
+
+```env
+SWAGGER_SERVER_PATH=/api
+```
+
+This tells Swagger to use `/api` as the base path so that the documentation works correctly through the Nginx reverse proxy. This variable is **not required** for local development or normal build steps — it is only needed on the deployed server.
 
 ---
 
